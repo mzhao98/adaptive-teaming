@@ -75,8 +75,8 @@ class Interaction_MDP():
         self.setup_bc_policy()
         self.beliefs = {(1, -10, -10, 1): 0.5, (-10, 1, 1, -10): 0.5}
         self.possible_actions_to_prob_success = {
-            (SQUARE, G1): 1.0,
-            (SQUARE, G2): 1.0,
+            (SQUARE, G1): 0.0,
+            (SQUARE, G2): 0.0,
             (TRIANGLE, G1): 1.0,
             (TRIANGLE, G2): 1.0,
             (ASK_PREF, SQUARE): 1.0,
