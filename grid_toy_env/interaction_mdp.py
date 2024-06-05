@@ -156,16 +156,12 @@ class Interaction_MDP:
             total_reward += reward
             current_state = next_state
             action_text = action_to_text[action]
-            print("current state", current_state)
-            # print("INIT possible_actions_to_prob_success", init_possible_actions_to_prob_success)
-            # print("INIT beliefs", init_beliefs)
-            print("action", action_text)
+            print("current state:", current_state)
+            print("action:", action_text)
 
-            # print("NEW possible_actions_to_prob_success", possible_actions_to_prob_success)
-            # print("NEW beliefs", beliefs)
-            print("reward", reward)
-            print("done", done)
-            print("next state", next_state)
+            print("reward:", reward)
+            print("done:", done)
+            print("next state:", next_state)
             print()
             (
                 self.beliefs,
@@ -178,9 +174,10 @@ class Interaction_MDP:
         return total_reward, interaction_result
 
     def get_action(self, current_state):
+        """Choose action by evaluating possible action outcomes."""
         best_reward = -1000
         best_action = None
-        # print("getting action")
+
         for action in self.possible_actions:
             (
                 init_beliefs,
@@ -191,6 +188,7 @@ class Interaction_MDP:
                 copy.deepcopy(self.possible_actions_to_prob_success),
                 copy.deepcopy(self.seen_demos),
             )
+
             (
                 next_state,
                 seen_demos,
@@ -205,14 +203,10 @@ class Interaction_MDP:
                 init_possible_actions_to_prob_success,
                 init_seen_demos,
             )
-            # if action == (TRIANGLE, G1):
-            #     pdb.set_trace()
+
             if action[0] == ASK_PREF:
-                best_next_action = None
                 best_next_reward = -1000
                 for next_action in self.possible_actions:
-                    # if next_action[0] != action[1]:
-                    #     continue
                     (
                         next_state,
                         seen_demos,
@@ -229,24 +223,11 @@ class Interaction_MDP:
                     )
                     if next_reward > best_next_reward:
                         best_next_reward = next_reward
-                        best_next_action = next_action
                 reward = best_next_reward + reward
-                # print("Action is ASK_PREF")
-                # print("next action", best_next_action)
-                # print("next state", next_state)
-                # print("reward", next_reward)
-                # print("beliefs", beliefs)
-                # print("done", done)
-                # print()
 
-            if action[0] == ASK_DEMO:
-                # next_next_state, seen_demos, possible_actions_to_prob_success, beliefs, reward, done = self.hypothetical_step_under_beliefs(
-                #     current_state, action, beliefs, possible_actions_to_prob_success, seen_demos)
-                best_next_action = None
+            elif action[0] == ASK_DEMO:
                 best_next_reward = -1000
                 for next_action in self.possible_actions:
-                    # if next_action[0] != action[1]:
-                    #     continue
                     (
                         next_state,
                         seen_demos,
@@ -263,14 +244,7 @@ class Interaction_MDP:
                     )
                     if next_reward > best_next_reward:
                         best_next_reward = next_reward
-                        best_next_action = next_action
                 reward = best_next_reward + reward
-            # print("action", action_to_text[action])
-            # print("reward", reward)
-            # print()
-
-            # print("INIT possible_actions_to_prob_success" , init_possible_actions_to_prob_success)
-            # print("NEW possible_actions_to_prob_success" , possible_actions_to_prob_success)
 
             if reward > best_reward:
                 best_reward = reward
