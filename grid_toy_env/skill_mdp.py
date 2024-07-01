@@ -11,7 +11,20 @@ PLACE = "place"
 
 
 class Gridworld:
+    """TODOs.
+
+    - Add orientation.
+    -
+    """
+
     def __init__(self, initial_config, reward_dict):
+        # TODO:
+        # 1.) Visualize start state w/ binary map & objects
+        # 2.) Load pngs of objects; add their arrays to the positions in the binary map
+        # 3.) No obstacles in map to begin with
+        # 4.) Skill execution: straight line interp. (delta x delta y) first to waypoint and then to goal,
+        #     use translation mat. and move the object mat.
+            # Need to store object locations during execution
         self.reward_dict = reward_dict
         self.initial_config = initial_config
 

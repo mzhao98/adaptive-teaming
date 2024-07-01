@@ -313,9 +313,12 @@ class Interaction_MDP:
             (TRIANGLE, G1),
             (TRIANGLE, G2),
         ]:
+            # TODO: Add robot linear-interp. demonstration w/ collision detection:
+            # Collision detection when overlapping w/ object while moving linearly.
             acting_object = action[0]
             acting_goal = action[1]
             prob_success = possible_actions_to_prob_success[action]
+            # TODO: Here belongs the robot policy rollout:
             if prob_success == 1:
                 if acting_object == SQUARE:
                     if len(current_state["square_positions"]):
@@ -362,6 +365,8 @@ class Interaction_MDP:
                 else:
                     acting_goal = G1
 
+            # Human's demonstration:
+            # TODO: Implement a point-wise demonstration / skill execution.
             seen_demos.append((acting_object, acting_goal))
             # possible_actions_to_prob_success[(acting_object, acting_goal)] = 1.0
             possible_actions_to_prob_success[(acting_object, G1)] = 1.0
