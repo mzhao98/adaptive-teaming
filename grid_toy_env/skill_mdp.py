@@ -5,7 +5,7 @@ from typing import Dict, List
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-from utils.object import Mug
+from utils.object import Fork, Mug
 
 SQUARE = "square"
 TRIANGLE = "triangle"
@@ -21,17 +21,16 @@ class Gridworld:
 
         ::params:
             ::map_config:
-                Dict[dimensions, agent_start_position, goal_positions]
+                Dict[map dimensions, agent_position, goal_positions]
             ::object_config: List[Object]
             ::reward_dict:
         """
         # TODO:
-        # 1.) Visualize start state w/ binary map & objects
-        # 2.) Load pngs of objects; add their arrays to the positions in the binary map
-        # 3.) No obstacles in map to begin with
-        # 4.) Skill execution: straight line interp. (delta x delta y) first to waypoint and then to goal,
+        # 1.) No obstacles in map to begin with
+        # 2.) Skill execution: straight line interp. (delta x delta y) first to waypoint and then to goal,
         #     use translation mat. and move the object mat.
         # Need to store object locations during execution
+        # 3.) Load pngs of objects; add their arrays to the positions in the binary map
         self.reward_dict = reward_dict
         self.map_config = map_config
         self.dimensions = self.map_config["dimensions"]
@@ -46,15 +45,15 @@ class Gridworld:
         self.target_object = reward_dict["target_object"]
 
         # state = {
-        #     'start_pos': (0, 0),
+        #     'agent_pose': (0, 0),
         #     'g1': (4, 4),
         #     'g2': (4, 0),
         #     'square_positions': [(1, 3), (2, 0)],
         #     'triangle_positions': [(3, 2), (2, 4)],
         # }
-        self.square_positions = map_config["square_positions"]
-        self.triangle_positions = map_config["triangle_positions"]
-        self.start_pos = map_config["start_pos"]
+        # self.square_positions = map_config["square_positions"]
+        # self.triangle_positions = map_config["triangle_positions"]
+        self.agent_pose = map_config["agent_pose"]
         self.g1 = map_config["g1"]
         self.g2 = map_config["g2"]
         self.objects_in_g1 = None
@@ -170,7 +169,7 @@ class Gridworld:
     def create_initial_state(self):
         # create dictionary of object location to object type and picked up state
         state = {}
-        state["pos"] = copy.deepcopy(self.start_pos)
+        state["pose"] = copy.deepcopy(self.agent_pose)
         # state['square_positions'] = copy.deepcopy(self.square_positions)
         # state['triangle_positions'] = copy.deepcopy(self.triangle_positions)
         state["holding"] = None
@@ -199,7 +198,7 @@ class Gridworld:
         # if action_type_moved is None:
         #     return False
         # print("action type moved", action_type_moved)
-        current_loc = current_state["pos"]
+        current_loc = current_state["pose"]
 
         new_loc = tuple(np.array(current_loc) + np.array(action))
         if (
@@ -236,9 +235,9 @@ class Gridworld:
             # if not holding anything
             if current_state["holding"] is None:
                 # check if there is an object to pick up
-                if current_state["pos"] in self.square_positions:
+                if current_state["pose"] in self.square_positions:
                     current_state["holding"] = "square"
-                elif current_state["pos"] in self.triangle_positions:
+                elif current_state["pose"] in self.triangle_positions:
                     current_state["holding"] = "triangle"
 
                 step_reward = step_cost
@@ -251,7 +250,7 @@ class Gridworld:
         if action == PLACE:
             if current_state["holding"] is not None:
                 holding_object = current_state["holding"]
-                if current_state["pos"] == self.g1:
+                if current_state["pose"] == self.g1:
                     current_state["objects_in_g1"] = current_state["holding"]
                     current_state["holding"] = None
                     step_reward = step_cost
@@ -262,7 +261,7 @@ class Gridworld:
                     ):
                         step_reward += self.correct_target_reward
                         return current_state, step_reward, done
-                elif current_state["pos"] == self.g2:
+                elif current_state["pose"] == self.g2:
                     current_state["objects_in_g2"] = current_state["holding"]
                     current_state["holding"] = None
                     step_reward = step_cost
@@ -280,11 +279,11 @@ class Gridworld:
                 step_reward = step_cost
                 return current_state, step_reward, False
 
-        current_loc = current_state["pos"]
+        current_loc = current_state["pose"]
         # print("current loc", current_loc)
         # print("action", action)
         new_loc = tuple(np.array(current_loc) + np.array(action))
-        current_state["pos"] = new_loc
+        current_state["pose"] = new_loc
         step_reward = step_cost
         done = self.is_done_given_state(current_state)
 
@@ -293,7 +292,7 @@ class Gridworld:
     def state_to_tuple(self, current_state):
         # convert current_state to tuple
         current_state_tup = []
-        current_state_tup.append(("pos", current_state["pos"]))
+        current_state_tup.append(("pose", current_state["pose"]))
         current_state_tup.append(("holding", current_state["holding"]))
         current_state_tup.append(
             ("objects_in_g1", current_state["objects_in_g1"])
@@ -308,7 +307,7 @@ class Gridworld:
         # convert current_state to tuple
         current_state_tup = list(current_state_tup)
         current_state = {}
-        current_state["pos"] = current_state_tup[0][1]
+        current_state["pose"] = current_state_tup[0][1]
         # current_state['square_positions'] = current_state_tup[1][1]
         # current_state['triangle_positions'] = current_state_tup[2][1]
         current_state["holding"] = current_state_tup[1][1]
@@ -639,25 +638,23 @@ class Gridworld:
 if __name__ == "__main__":
     # reward_weights = [1, -1, -1, 1]  # [obj A placed in G1, object A in G2, B in G1, B in G2]
 
-    state = {
-        "start_pos": (0, 0),  # The agent's start position
-        "g1": (4, 4),
-        "g2": (4, 0),
-        "square_positions": [(1, 3), (2, 0)],
-        "triangle_positions": [(3, 2), (2, 4)],
-    }
     map_config = {
+        "agent_pose": (0, 0),  # The agent's start position
         "dimensions": [20, 20],
-        "start_pos": (0, 0),  # The agent's start position
         "g1": (4, 4),
         "g2": (4, 0),
     }
 
     mug = Mug()
+    fork = Fork()
+    object_list = [fork, mug]
+    breakpoint()
     reward = {
-        "target_object": SQUARE,
+        "target_object": str(mug),
         "target_goal": "g1",
     }
 
-    game = Gridworld(map_config=map_config, objects=[mug], reward_dict=reward)
+    game = Gridworld(
+        map_config=map_config, objects=object_list, reward_dict=reward
+    )
     optimal_rew, game_results = game.compute_optimal_performance()
