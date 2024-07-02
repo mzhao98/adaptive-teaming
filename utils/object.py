@@ -35,6 +35,10 @@ class Object:
             self.pose = pose
         self.set_coordinates()
 
+    def __str__(self) -> str:
+        """Return simple class name."""
+        return str(self.__class__.__name__)
+
     @property
     def dimensions(self) -> List:
         """Get Object dimensions."""
