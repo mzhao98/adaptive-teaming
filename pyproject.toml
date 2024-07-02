@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adaptive_teaming"
+description = "Adapt, Delegate, Inquire"
+version = "0.1"
+authors = [
+    {name = "Shivam Vats", email = "shivam@shivam.edu"},
+    {name = "Oliver Kroemer", email = "callaghan@cmu.edu"},
+    {name = "Henny Admoni", email = "callaghan@cmu.edu"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages]
+find = {}

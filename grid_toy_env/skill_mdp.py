@@ -1,8 +1,11 @@
 import copy
 from itertools import product
+from typing import Dict, List
 
+import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+from utils.object import Mug
 
 SQUARE = "square"
 TRIANGLE = "triangle"
@@ -11,25 +14,36 @@ PLACE = "place"
 
 
 class Gridworld:
-    """TODOs.
+    """A simple 2D grid world."""
 
-    - Add orientation.
-    -
-    """
+    def __init__(self, map_config: Dict, objects: List, reward_dict: Dict):
+        """Initialize a Gridworld Environment.
 
-    def __init__(self, initial_config, reward_dict):
+        ::params:
+            ::map_config:
+                Dict[dimensions, agent_start_position, goal_positions]
+            ::object_config: List[Object]
+            ::reward_dict:
+        """
         # TODO:
         # 1.) Visualize start state w/ binary map & objects
         # 2.) Load pngs of objects; add their arrays to the positions in the binary map
         # 3.) No obstacles in map to begin with
         # 4.) Skill execution: straight line interp. (delta x delta y) first to waypoint and then to goal,
         #     use translation mat. and move the object mat.
-            # Need to store object locations during execution
+        # Need to store object locations during execution
         self.reward_dict = reward_dict
-        self.initial_config = initial_config
+        self.map_config = map_config
+        self.dimensions = self.map_config["dimensions"]
+        self.objects = objects
 
-        self.target_object = reward_dict["target_object"]
+        new_map = np.zeros(self.dimensions)
+        new_map = self.place_objects(new_map)
+        self.binary_map = new_map
+        self.visualize()
+
         self.target_goal = reward_dict["target_goal"]
+        self.target_object = reward_dict["target_object"]
 
         # state = {
         #     'start_pos': (0, 0),
@@ -38,11 +52,11 @@ class Gridworld:
         #     'square_positions': [(1, 3), (2, 0)],
         #     'triangle_positions': [(3, 2), (2, 4)],
         # }
-        self.square_positions = initial_config["square_positions"]
-        self.triangle_positions = initial_config["triangle_positions"]
-        self.start_pos = initial_config["start_pos"]
-        self.g1 = initial_config["g1"]
-        self.g2 = initial_config["g2"]
+        self.square_positions = map_config["square_positions"]
+        self.triangle_positions = map_config["triangle_positions"]
+        self.start_pos = map_config["start_pos"]
+        self.g1 = map_config["g1"]
+        self.g2 = map_config["g2"]
         self.objects_in_g1 = None
         self.objects_in_g2 = None
 
@@ -81,6 +95,54 @@ class Gridworld:
 
         self.num_features = 4
         self.correct_target_reward = 10
+
+    @property
+    def binary_map(self) -> np.ndarray:
+        """Get Gridworld binary map."""
+        return self._binary_map
+
+    @binary_map.setter
+    def binary_map(self, new_map: np.ndarray) -> None:
+        """Set Gridworld binary map."""
+        self._binary_map = new_map
+
+    @property
+    def dimensions(self) -> List:
+        """Get Gridworld dimensions."""
+        return self._dimensions
+
+    @dimensions.setter
+    def dimensions(self, dims: List) -> None:
+        """Set Gridworld dimensions."""
+        self._dimensions = dims
+
+    @property
+    def objects(self) -> List:
+        """Get Gridworld objects."""
+        return self._objects
+
+    @objects.setter
+    def objects(self, objs: List) -> None:
+        """Set Gridworld objects."""
+        self._objects = objs
+
+    def place_objects(self, empty_map: np.ndarray) -> np.ndarray:
+        """Place objects in empty_map."""
+        binary_map = empty_map.copy()
+
+        for o in self.objects:
+            binary_map[
+                o.coordinates[0],
+                o.coordinates[1],
+            ] = 1
+
+        return binary_map
+
+    def visualize(self) -> None:
+        """Visualize Gridworld state."""
+        plt.imshow(self.binary_map, cmap="Greys", interpolation="nearest")
+
+        plt.show()
 
     def make_actions_list(self):
         actions_list = []
@@ -578,17 +640,24 @@ if __name__ == "__main__":
     # reward_weights = [1, -1, -1, 1]  # [obj A placed in G1, object A in G2, B in G1, B in G2]
 
     state = {
-        "start_pos": (0, 0),
+        "start_pos": (0, 0),  # The agent's start position
         "g1": (4, 4),
         "g2": (4, 0),
         "square_positions": [(1, 3), (2, 0)],
         "triangle_positions": [(3, 2), (2, 4)],
     }
+    map_config = {
+        "dimensions": [20, 20],
+        "start_pos": (0, 0),  # The agent's start position
+        "g1": (4, 4),
+        "g2": (4, 0),
+    }
+
+    mug = Mug()
     reward = {
         "target_object": SQUARE,
         "target_goal": "g1",
     }
 
-    game = Gridworld(state, reward)
+    game = Gridworld(map_config=map_config, objects=[mug], reward_dict=reward)
     optimal_rew, game_results = game.compute_optimal_performance()
-    # pdb.set_trace()
