@@ -1,5 +1,6 @@
 """A class for simple manipulation objects."""
 
+from copy import deepcopy
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
@@ -17,22 +18,22 @@ class Object:
 
         ::Inputs:
             ::category: The object category [CUP, MUG, FORK, SPOON]
-            ::pose: Dict[x, y, orientation], with the TOP-left (x,y)
-                    coordinate as origin, and orientation. In practice,
-                    orientation is one of 4 axis-aligned angles
+            ::pose: Dict[orientation, position], with the TOP-left (x,y)
+                    coordinate as origin, and orientation in degrees.
+                    In practice, orientation is one of 4 axis-aligned angles
             ::dimensions: [x, y] dimensions
 
         """
         self.dimensions = dimensions
         if pose is None:
             pose = {
-                "x": 0,
-                "y": 0,
                 "orientation": 0.0,
+                "position": (0, 0),
             }
             self.pose = pose
         else:
             self.pose = pose
+        self.start_pose = deepcopy(self.pose)
         self.set_coordinates()
 
     def __str__(self) -> str:
@@ -70,6 +71,16 @@ class Object:
         self._coordinates = coords
 
     @property
+    def orientation(self) -> float:
+        """Get Object orientation."""
+        return self.pose["orientation"]
+
+    @orientation.setter
+    def orientation(self, new_orientation: float) -> None:
+        """Set Object orientation."""
+        self.pose["orientation"] = new_orientation
+
+    @property
     def pose(self) -> Dict:
         """Get Object pose."""
         return self._pose
@@ -78,6 +89,18 @@ class Object:
     def pose(self, new_pose: Dict) -> None:
         """Set Object pose."""
         self._pose = new_pose
+        self._orientation = new_pose["orientation"]
+        self._position = new_pose["position"]
+
+    @property
+    def position(self) -> Tuple:
+        """Get Object position."""
+        return self._pose["position"]
+
+    @position.setter
+    def position(self, new_position: Tuple) -> None:
+        """Set Object position."""
+        self._pose["position"] = new_position
 
     @property
     def png(self) -> List:
@@ -89,10 +112,30 @@ class Object:
         """Set Object png."""
         self._png = image
 
+    @property
+    def start_pose(self) -> Dict:
+        """Get Object start pose."""
+        return self._start_pose
+
+    @start_pose.setter
+    def start_pose(self, new_start_pose: Dict) -> None:
+        """Set Object start_pose."""
+        self._start_pose = new_start_pose
+
+    def reset_pose(self) -> None:
+        """Put object back at start pose."""
+        self.pose = self.start_pose
+
     def set_coordinates(self) -> None:
         """Set object coordinates according to pose."""
-        x = np.arange(self.pose["x"], self.pose["x"] + self.dimensions[0])
-        y = np.arange(self.pose["y"], self.pose["y"] + self.dimensions[1])
+        x = np.arange(
+            self.pose["position"][0],
+            self.pose["position"][0] + self.dimensions[0],
+        )
+        y = np.arange(
+            self.pose["position"][1],
+            self.pose["position"][1] + self.dimensions[1],
+        )
         xs, ys = np.meshgrid(x, y)
         self.rotate(coords=[xs, ys], degrees=self.pose["orientation"])
 
@@ -157,6 +200,11 @@ class Object:
             pts_rotated[:, 0], pts_rotated[:, 1]
         )
         self.coordinates = [new_x_coords, new_y_coords]
+
+    def move(self, action: Tuple) -> None:
+        """Move the object with action."""
+        self.position = tuple(np.array(self.position) + np.array(action))
+        self.set_coordinates()
 
 
 class Cup(Object):
