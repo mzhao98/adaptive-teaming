@@ -240,14 +240,23 @@ class Gridworld:
 
         return True
 
-    def step_given_state(self, input_state, action, check=False):
+    def step_given_state(
+        self, input_state, action, execute_policy: bool = False
+    ):
+        """Perform a step using input state and action.
+
+        ::inputs:
+            ::input_state:
+            ::action:
+            ::execute_policy: True when executing final, learned policy.
+        """
         step_cost = -0.1
         current_state = copy.deepcopy(input_state)
         current_state["objects"] = input_state["objects"]
         current_state["holding"] = input_state["holding"]
 
         if self.is_done_given_state(current_state):
-            step_reward = 0
+            step_reward = 0.0
             return current_state, step_reward, True
 
         if action in self.directions:
@@ -264,6 +273,8 @@ class Gridworld:
                     # Check if there is an object to pick up:
                     if current_state["agent_position"] == o.position:
                         # current_state["holding"] = o
+
+                        # TODO: This check might be a hack:
                         if o == self.target_object:
                             current_state["holding"] = o
 
@@ -319,10 +330,9 @@ class Gridworld:
                 return current_state, step_reward, False
 
         current_loc = current_state["agent_position"]
-        # print("current loc", current_loc)
-        # print("action", action)
         new_loc = tuple(np.array(current_loc) + np.array(action))
-        if check:
+
+        if execute_policy:
             if (
                 current_state["holding"] is not None
                 and action in self.directions
@@ -621,6 +631,7 @@ class Gridworld:
             # check for convergence
             if delta < self.epsilson:
                 break
+
         # compute optimal policy
         for s in range(n_states):
             pi[s] = np.argmax(np.sum(vf * self.transitions[s, :, :], 0))
@@ -656,7 +667,7 @@ class Gridworld:
             game_results.append((self.current_state, action))
 
             next_state, team_rew, done = self.step_given_state(
-                self.current_state, action, check=True
+                self.current_state, action, execute_policy=True
             )
 
             self.current_state = next_state
