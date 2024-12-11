@@ -21,6 +21,10 @@ class FacilityLocationPlanner():
     def __init__(self, cost_cfg):
         self.cost_cfg = cost_cfg
 
+    def update_pref_belief(self, task, pref_obs):
+        """Update each preference belief based on the observed preference."""
+        pass
+
     def plan(self, task_seq, task_similarity_fn, pref_similarity_fn):
         """
         task_seq: sequence of tasks each described a vector

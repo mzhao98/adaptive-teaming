@@ -89,6 +89,9 @@ class Gridworld:
         self.num_features = 4
         self.correct_target_reward = 10
 
+        # Human model
+        self.true_human_reward_weights = true_human_reward_weights
+
     @property
     def binary_map(self) -> List:
         """Get Gridworld binary map."""
@@ -239,6 +242,20 @@ class Gridworld:
             return False
 
         return True
+
+    # human model
+    #-------------
+    def query_demo_pref(self, task):
+        """
+        Query the human for a demonstration of task along with their pref.
+        """
+        pass
+
+    def query_pref(self, task):
+        """
+        Query the human for their preference for task.
+        """
+        pass
 
     def step_given_state(
         self, input_state, action, execute_policy: bool = False
