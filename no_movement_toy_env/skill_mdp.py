@@ -1,67 +1,84 @@
 import copy
-import math
-import pdb
-
-import numpy as np
-import pickle
-import sys
-import networkx as nx
 from itertools import product
-import itertools
+from random import sample
+from typing import Dict, List, Union
+
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+from utils.object import Fork, Mug
 
-SQUARE = 'square'
-TRIANGLE = 'triangle'
-PICKUP = 'pickup'
-PLACE = 'place'
+SQUARE = "square"
+TRIANGLE = "triangle"
+PICKUP = "pickup"
+PLACE = "place"
 
 
-class Gridworld():
-    def __init__(self, initial_config, reward_dict):
+class Gridworld:
+    """A simple 2D grid world."""
+
+    def __init__(self, map_config: Dict, objects: List, reward_dict: Dict):
+        """Initialize a Gridworld Environment.
+
+        ::params:
+            ::map_config:
+                Dict[map dimensions, agent_position, goal_positions]
+            ::object_config: List[Object]
+            ::reward_dict:
+        """
+        # TODO:
+        # 1.) No obstacles in map to begin with
+        # 2.) Skill execution: straight line interp. (delta x delta y) first to waypoint and then to goal,
+        #     use translation mat. and move the object mat.
+        # Need to store object locations during execution
+        # 3.) Load pngs of objects; add their arrays to the positions in the binary map
         self.reward_dict = reward_dict
-        self.initial_config = initial_config
+        self.map_config = map_config
+        self.dimensions = self.map_config["dimensions"]
+        self.set_env_limits()
+        self.objects = objects
+        self.object_poses = tuple(
+            (o.orientation, o.position) for o in self.objects
+        )
 
-        self.target_object = reward_dict['target_object']
-        self.target_goal = reward_dict['target_goal']
+        self.binary_map = self.place_objects(objects=self.objects)
 
-        # state = {
-        #     'start_pos': (0, 0),
-        #     'g1': (4, 4),
-        #     'g2': (4, 0),
-        #     'square_positions': [(1, 3), (2, 0)],
-        #     'triangle_positions': [(3, 2), (2, 4)],
-        # }
-        self.square_positions = initial_config['square_positions']
-        self.triangle_positions = initial_config['triangle_positions']
-        self.start_pos = initial_config['start_pos']
-        self.g1 = initial_config['g1']
-        self.g2 = initial_config['g2']
+        self.target_goal = reward_dict["target_goal"]
+        self.target_object = reward_dict["target_object"]
+
+        # self.square_positions = map_config["square_positions"]
+        # self.triangle_positions = map_config["triangle_positions"]
+        self.agent_start_position = map_config["agent_position"]
+        self.g1 = map_config["g1"]
+        self.g2 = map_config["g2"]
         self.objects_in_g1 = None
         self.objects_in_g2 = None
 
-        self.set_env_limits()
-
         self.directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-
 
         # get possible joint actions and actions
         self.possible_single_actions = self.make_actions_list()
         # print("possible single actions", self.possible_single_actions)
 
-
         self.current_state = self.create_initial_state()
-        # self.reset()
-
+        self.visualize(self.current_state, title="Initial State")
 
         # set value iteration components
-        self.transitions, self.rewards, self.state_to_idx, self.idx_to_action, \
-        self.idx_to_state, self.action_to_idx = None, None, None, None, None, None
+        (
+            self.transitions,
+            self.rewards,
+            self.state_to_idx,
+            self.idx_to_action,
+            self.idx_to_state,
+            self.action_to_idx,
+        ) = (None, None, None, None, None, None)
         self.vf = None
         self.pi = None
         self.policy = None
         self.epsilson = 0.001
         self.gamma = 0.99
-        self.maxiter = 10000
+        self.maxiter = 40
 
         # self.step_cost = -0.01
         # self.push_switch_cost = -0.05
@@ -72,7 +89,62 @@ class Gridworld():
         self.num_features = 4
         self.correct_target_reward = 10
 
+    @property
+    def binary_map(self) -> List:
+        """Get Gridworld binary map."""
+        return self._binary_map
 
+    @binary_map.setter
+    def binary_map(self, new_map: List) -> None:
+        """Set Gridworld binary map."""
+        self._binary_map = new_map
+
+    @property
+    def dimensions(self) -> List:
+        """Get Gridworld dimensions."""
+        return self._dimensions
+
+    @dimensions.setter
+    def dimensions(self, dims: List) -> None:
+        """Set Gridworld dimensions."""
+        self._dimensions = dims
+
+    @property
+    def objects(self) -> List:
+        """Get Gridworld objects."""
+        return self._objects
+
+    @objects.setter
+    def objects(self, objs: List) -> None:
+        """Set Gridworld objects."""
+        self._objects = objs
+
+    def place_objects(self, objects: List) -> List:
+        """Place objects in empty_map."""
+        binary_map = np.zeros(self.dimensions)
+
+        for o in objects:
+            try:
+                binary_map[
+                    o.coordinates[0],
+                    o.coordinates[1],
+                ] = 1
+            except IndexError:
+                continue
+
+        return binary_map.tolist()
+
+    def visualize(self, state: Dict, title: Union[None, str] = None) -> None:
+        """Visualize Gridworld state."""
+        binary_map = self.place_objects(state["objects"])
+        fix, ax = plt.subplots()
+        ax.imshow(binary_map, cmap="Greys", interpolation="nearest")
+        agt_state = (state["agent_position"][1], state["agent_position"][0])
+        agt = patches.Rectangle(agt_state, 1, 1, facecolor="r")
+        ax.add_patch(agt)
+        if title:
+            plt.title(title, fontweight="bold")
+        plt.show()
 
     def make_actions_list(self):
         actions_list = []
@@ -81,34 +153,41 @@ class Gridworld():
         actions_list.append(PLACE)
         return actions_list
 
+    def set_env_limits(self) -> None:
+        """Set environment limits."""
+        if self.dimensions is not None:
+            high_x = self.dimensions[0]
+            high_y = self.dimensions[1]
+        else:
+            high_x = high_y = 5
 
-    def set_env_limits(self):
-        # set environment limits
         self.x_min = 0
-        self.x_max = 5
+        self.x_max = high_x
         self.y_min = 0
-        self.y_max = 5
+        self.y_max = high_y
 
-        self.all_coordinate_locations = list(product(range(self.x_min,self.x_max),
-                                                     range(self.y_min, self.y_max)))
-
-
+        self.all_coordinate_locations = list(
+            product(
+                range(self.x_min, self.x_max), range(self.y_min, self.y_max)
+            )
+        )
 
     def reset(self):
+        for o in self.objects:
+            o.reset_pose()
         self.current_state = self.create_initial_state()
 
-
-
-
     def create_initial_state(self):
-        # create dictionary of object location to object type and picked up state
+        """Create dictionary of object location, type, and picked-up state."""
         state = {}
-        state['pos'] = copy.deepcopy(self.start_pos)
+        state["agent_position"] = copy.deepcopy(self.agent_start_position)
+        state["holding"] = None
+        state["objects_in_g1"] = None
+        state["objects_in_g2"] = None
+        state["objects"] = self.objects
+
         # state['square_positions'] = copy.deepcopy(self.square_positions)
         # state['triangle_positions'] = copy.deepcopy(self.triangle_positions)
-        state['holding'] = None
-        state['objects_in_g1'] = None
-        state['objects_in_g2'] = None
         # state['g1'] = copy.deepcopy(self.g1)
         # state['g2'] = copy.deepcopy(self.g2)
         # state['target_object'] = self.target_object
@@ -116,12 +195,30 @@ class Gridworld():
 
         return state
 
-
     def is_done_given_state(self, current_state):
-        # check if player at exit location
-        # print("current state", current_state)
-        if current_state['objects_in_g1'] != None or current_state['objects_in_g2'] != None:
+        """Check if target object in target goal."""
+        if (
+            current_state["objects_in_g1"] is not None
+            and self.target_goal == "g1"
+            and current_state["objects_in_g1"] == str(self.target_object)
+        ):
             return True
+
+        elif (
+            current_state["objects_in_g2"] is not None
+            and self.target_goal == "g2"
+            and current_state["objects_in_g2"] == str(self.target_object)
+        ):
+            return True
+
+        # check if player at exit location
+        # if (
+        #     current_state["objects_in_g1"] is not None
+        #     or current_state["objects_in_g2"] is not None
+        # ):
+        #     print(current_state["objects_in_g1"])
+        #     print(current_state["objects_in_g2"])
+        #     return True
 
         return False
 
@@ -130,30 +227,37 @@ class Gridworld():
         # if action_type_moved is None:
         #     return False
         # print("action type moved", action_type_moved)
-        current_loc = current_state['pos']
+        current_loc = current_state["agent_position"]
 
         new_loc = tuple(np.array(current_loc) + np.array(action))
-        if new_loc[0] < self.x_min or new_loc[0] >= self.x_max or new_loc[1] < self.y_min or new_loc[1] >= self.y_max:
+        if (
+            new_loc[0] < self.x_min
+            or new_loc[0] >= self.x_max
+            or new_loc[1] < self.y_min
+            or new_loc[1] >= self.y_max
+        ):
             return False
-
-        # if new_loc in current_state['grid'].values() and new_loc != current_loc:
-        #     return False
 
         return True
 
+    def step_given_state(
+        self, input_state, action, execute_policy: bool = False
+    ):
+        """Perform a step using input state and action.
 
-    def step_given_state(self, input_state, action):
+        ::inputs:
+            ::input_state:
+            ::action:
+            ::execute_policy: True when executing final, learned policy.
+        """
         step_cost = -0.1
         current_state = copy.deepcopy(input_state)
-
-        # print("action", action)
-        # check if action is exit
-        # print("action in step", action)
+        current_state["objects"] = input_state["objects"]
+        current_state["holding"] = input_state["holding"]
 
         if self.is_done_given_state(current_state):
-            step_reward = 0
+            step_reward = 0.0
             return current_state, step_reward, True
-
 
         if action in self.directions:
             if self.is_valid_push(current_state, action) is False:
@@ -161,14 +265,18 @@ class Gridworld():
                 return current_state, step_reward, False
 
         if action == PICKUP:
+            # If not holding anything:
+            if current_state["holding"] is None:
+                # Re-order the objects so we see them all:
+                objs = sample(self.objects, len(self.objects))
+                for o in objs:
+                    # Check if there is an object to pick up:
+                    if current_state["agent_position"] == o.position:
+                        # current_state["holding"] = o
 
-            # if not holding anything
-            if current_state['holding'] is None:
-                # check if there is an object to pick up
-                if current_state['pos'] in self.square_positions:
-                    current_state['holding'] = 'square'
-                elif current_state['pos'] in self.triangle_positions:
-                    current_state['holding'] = 'triangle'
+                        # TODO: This check might be a hack:
+                        if o == self.target_object:
+                            current_state["holding"] = o
 
                 step_reward = step_cost
                 return current_state, step_reward, False
@@ -178,72 +286,99 @@ class Gridworld():
                 return current_state, step_reward, False
 
         if action == PLACE:
-            if current_state['holding'] is not None:
-                holding_object = current_state['holding']
-                if current_state['pos'] == self.g1:
-                    current_state['objects_in_g1'] = current_state['holding']
-                    current_state['holding'] = None
-                    step_reward = step_cost
-                    done = self.is_done_given_state(current_state)
-                    if self.target_object == holding_object and self.target_goal == 'g1':
-                        step_reward += self.correct_target_reward
-                        return current_state, step_reward, done
-                elif current_state['pos'] == self.g2:
-                    current_state['objects_in_g2'] = current_state['holding']
-                    current_state['holding'] = None
-                    step_reward = step_cost
-                    done = self.is_done_given_state(current_state)
-                    if self.target_object == holding_object and self.target_goal == 'g2':
-                        step_reward += self.correct_target_reward
-                        return current_state, step_reward, done
+            if current_state["holding"] is not None:
+                holding_object = current_state["holding"]
+                if current_state["agent_position"] == self.g1:
+                    if current_state["objects_in_g2"] is not str(
+                        current_state["holding"]
+                    ):
+                        current_state["objects_in_g1"] = str(
+                            current_state["holding"]
+                        )
+                        current_state["holding"] = None
+                        step_reward = step_cost
+                        done = self.is_done_given_state(current_state)
+                        if (
+                            self.target_object == holding_object
+                            and self.target_goal == "g1"
+                        ):
+                            step_reward += self.correct_target_reward
+                            return current_state, step_reward, done
+
+                elif current_state["agent_position"] == self.g2:
+                    if current_state["objects_in_g1"] is not str(
+                        current_state["holding"]
+                    ):
+                        current_state["objects_in_g2"] = str(
+                            current_state["holding"]
+                        )
+                        current_state["holding"] = None
+                        step_reward = step_cost
+                        done = self.is_done_given_state(current_state)
+                        if (
+                            self.target_object == holding_object
+                            and self.target_goal == "g2"
+                        ):
+                            step_reward += self.correct_target_reward
+                            return current_state, step_reward, done
 
                 step_reward = step_cost
                 return current_state, step_reward, False
+
             else:
                 step_reward = step_cost
                 return current_state, step_reward, False
 
-
-        current_loc = current_state['pos']
-        # print("current loc", current_loc)
-        # print("action", action)
+        current_loc = current_state["agent_position"]
         new_loc = tuple(np.array(current_loc) + np.array(action))
-        current_state['pos'] = new_loc
+
+        if execute_policy:
+            if (
+                current_state["holding"] is not None
+                and action in self.directions
+            ):
+                current_state["holding"].move(action=action)
+
+        current_state["agent_position"] = new_loc
         step_reward = step_cost
         done = self.is_done_given_state(current_state)
 
-
         return current_state, step_reward, done
 
-
-
     def state_to_tuple(self, current_state):
-        # convert current_state to tuple
+        """Convert current_state to tuple."""
         current_state_tup = []
-        current_state_tup.append(('pos', current_state['pos']))
-        current_state_tup.append(('holding', current_state['holding']))
-        current_state_tup.append(('objects_in_g1', current_state['objects_in_g1']))
-        current_state_tup.append(('objects_in_g2', current_state['objects_in_g2']))
-
-
+        current_state_tup.append(
+            ("agent_position", current_state["agent_position"])
+        )
+        current_state_tup.append(("holding", current_state["holding"]))
+        current_state_tup.append(
+            ("objects_in_g1", current_state["objects_in_g1"])
+        )
+        current_state_tup.append(
+            ("objects_in_g2", current_state["objects_in_g2"])
+        )
+        current_state_tup.append(
+            ("objects", tuple(x for x in current_state["objects"]))
+        )
 
         return tuple(current_state_tup)
 
     def tuple_to_state(self, current_state_tup):
-        # convert current_state to tuple
+        """Convert current_state to tuple."""
         current_state_tup = list(current_state_tup)
         current_state = {}
-        current_state['pos'] = current_state_tup[0][1]
+        current_state["agent_position"] = current_state_tup[0][1]
+        current_state["holding"] = current_state_tup[1][1]
+        current_state["objects_in_g1"] = current_state_tup[2][1]
+        current_state["objects_in_g2"] = current_state_tup[3][1]
+        current_state["objects"] = current_state_tup[4][1]
         # current_state['square_positions'] = current_state_tup[1][1]
         # current_state['triangle_positions'] = current_state_tup[2][1]
-        current_state['holding'] = current_state_tup[1][1]
-        current_state['objects_in_g1'] = current_state_tup[2][1]
-        current_state['objects_in_g2'] = current_state_tup[3][1]
         # current_state['g1'] = current_state_tup[6][1]
         # current_state['g2'] = current_state_tup[7][1]
         # current_state['target_object'] = current_state_tup[8][1]
         # current_state['target_goal'] = current_state_tup[9][1]
-
 
         return current_state
 
@@ -251,26 +386,23 @@ class Gridworld():
         self.reset()
 
         actions = self.possible_single_actions
-        # print("actions", actions)
-        # pdb.set_trace()
-        # create directional graph to represent all states
+        # Create directional graph to represent all states:
         G = nx.DiGraph()
 
         visited_states = set()
 
-        stack = [copy.deepcopy(self.current_state)]
+        # stack = [copy.deepcopy(self.current_state)]
+        stack = [self.current_state]
 
         while stack:
-            # print("len visited_states", len(visited_states))
-            # print("len stack", len(stack))
-            # print("visited_states", visited_states)
             state = stack.pop()
 
             # convert old state to tuple
             state_tup = self.state_to_tuple(state)
             # print("new_state_tup", state_tup)
 
-            # if state has not been visited, add it to the set of visited states
+            # If state has not been visited,
+            # add it to the set of visited states:
             if state_tup not in visited_states:
                 visited_states.add(state_tup)
 
@@ -285,13 +417,14 @@ class Gridworld():
                     done = True
 
                 else:
-                    next_state, team_reward, done = self.step_given_state(state, action)
+                    next_state, team_reward, done = self.step_given_state(
+                        state, action
+                    )
                 # print("state", state)
                 # print("action", action)
                 # print("team_reward", team_reward)
                 # print("done", done)
                 # print("next_state", next_state)
-
 
                 # if done:
                 #     print("DONE")
@@ -310,11 +443,14 @@ class Gridworld():
                 # pdb.set_trace()
 
                 if new_state_tup not in visited_states:
-                    stack.append(copy.deepcopy(next_state))
+                    # stack.append(copy.deepcopy(next_state))
+                    stack.append(next_state)
 
                 # add edge to graph from current state to new state with weight equal to reward
                 # if state_tup == new_state_tup:
-                G.add_edge(state_tup, new_state_tup, weight=team_reward, action=action)
+                G.add_edge(
+                    state_tup, new_state_tup, weight=team_reward, action=action
+                )
                 # if state == {'grid': {(1, 1): (3, 3)}, 'exit': False, 'orientation': 0}:
                 #     el = G.out_edges(state_tup, data=True)
                 #     print("len el", len(el))
@@ -337,7 +473,7 @@ class Gridworld():
                 #         G.add_edge(state_tup, new_state_tup, weight=-200, action=action)
                 #     else:
                 #         G.add_edge(state_tup, new_state_tup, weight=0, action=action)
-                        # pdb.set_trace()
+                # pdb.set_trace()
         # pdb.set_trace()
         states = list(G.nodes)
         # print("NUMBER OF STATES", len(state
@@ -368,14 +504,21 @@ class Gridworld():
                     done = True
 
                 else:
-                    next_state, team_reward, done = self.step_given_state(state, action)
-            # for edge in edges:
+                    next_state, team_reward, done = self.step_given_state(
+                        state, action
+                    )
+                # for edge in edges:
                 # get index of action in action_idx
                 # pdb.set_trace()
                 # action_idx_i = action_to_idx[edge[2]['action']]
                 # get index of next state in node list
                 # next_state_i = states.index(edge[1])
-                next_state_i = state_to_idx[self.state_to_tuple(next_state)]
+                try:
+                    next_state_i = state_to_idx[
+                        self.state_to_tuple(next_state)
+                    ]
+                except KeyError:
+                    breakpoint()
                 # add edge to transition matrix
                 # if i == next_state_i:
                 #     reward_mat[i, action_idx_i] = -200
@@ -395,7 +538,7 @@ class Gridworld():
                 #     edges = G.out_edges(states[i], data=True)
                 #     print("edges= ", edges)
                 #     print("action", idx_to_action[action_idx_i])
-                    # pdb.set_trace()
+                # pdb.set_trace()
 
         # check that for each state and action pair, the sum of the transition probabilities is 1 (or 0 for terminal states)
         # for i in range(len(states)):
@@ -404,14 +547,33 @@ class Gridworld():
         #         print("np.sum(transition_mat[i, :, j]", np.sum(transition_mat[i, :, j]))
         # assert np.isclose(np.sum(transition_mat[i, :, j]), 1.0) or np.isclose(np.sum(transition_mat[i, :, j]),
         #                                                                       0.0)
-        self.transitions, self.rewards, self.state_to_idx, \
-        self.idx_to_action, self.idx_to_state, self.action_to_idx = transition_mat, reward_mat, state_to_idx, \
-                                                                    idx_to_action, idx_to_state, action_to_idx
+        (
+            self.transitions,
+            self.rewards,
+            self.state_to_idx,
+            self.idx_to_action,
+            self.idx_to_state,
+            self.action_to_idx,
+        ) = (
+            transition_mat,
+            reward_mat,
+            state_to_idx,
+            idx_to_action,
+            idx_to_state,
+            action_to_idx,
+        )
 
         # print("number of states", len(states))
         # print("number of actions", len(actions))
         # print("transition matrix shape", transition_mat.shape)
-        return transition_mat, reward_mat, state_to_idx, idx_to_action, idx_to_state, action_to_idx
+        return (
+            transition_mat,
+            reward_mat,
+            state_to_idx,
+            idx_to_action,
+            idx_to_state,
+            action_to_idx,
+        )
 
     def vectorized_vi(self):
         # def spatial_environment(transitions, rewards, epsilson=0.0001, gamma=0.99, maxiter=10000):
@@ -452,13 +614,24 @@ class Gridworld():
                 # store old value function
                 old_v = vf[s].copy()
                 # compute new value function
-                Q[s] = np.sum((self.rewards[s] + self.gamma * vf) * self.transitions[s, :, :], 0)
-                vf[s] = np.max(np.sum((self.rewards[s] + self.gamma * vf) * self.transitions[s, :, :], 0))
+                Q[s] = np.sum(
+                    (self.rewards[s] + self.gamma * vf)
+                    * self.transitions[s, :, :],
+                    0,
+                )
+                vf[s] = np.max(
+                    np.sum(
+                        (self.rewards[s] + self.gamma * vf)
+                        * self.transitions[s, :, :],
+                        0,
+                    )
+                )
                 # compute delta
                 delta = np.max((delta, np.abs(old_v - vf[s])[0]))
             # check for convergence
             if delta < self.epsilson:
                 break
+
         # compute optimal policy
         for s in range(n_states):
             pi[s] = np.argmax(np.sum(vf * self.transitions[s, :, :], 0))
@@ -476,75 +649,67 @@ class Gridworld():
 
         iters = 0
         game_results = []
-        sum_feature_vector = np.zeros(4)
 
-        # self.render(self.current_state, iters)
         while not done:
             iters += 1
 
             current_state_tup = self.state_to_tuple(self.current_state)
 
-            state_idx = self.state_to_idx[current_state_tup]
+            try:
+                state_idx = self.state_to_idx[current_state_tup]
+            except KeyError:
+                breakpoint()
 
             action_distribution = self.policy[state_idx]
             action = np.argmax(action_distribution)
             action = self.idx_to_action[action]
 
-            # print("state", self.current_state)
-            # print("action", action)
-
             game_results.append((self.current_state, action))
 
-            next_state, team_rew, done = self.step_given_state(self.current_state, action)
+            next_state, team_rew, done = self.step_given_state(
+                self.current_state, action, execute_policy=True
+            )
 
-            # print("next_state", next_state)
             self.current_state = next_state
-            # print("new state", self.current_state)
-            # print("team_rew", team_rew)
-            # print("done", done)
-            # print()
-            # self.render(self.current_state, iters)
+            self.visualize(state=self.current_state)
 
             total_reward += team_rew
 
             if iters > 40:
                 break
 
-        # self.save_rollouts_to_video()
-
         return total_reward, game_results
 
-
     def compute_optimal_performance(self):
-        # print("start enumerating states")
+        print("Enumerating states...")
         self.enumerate_states()
-        # print("done enumerating states")
-        # print("start vi")
+        print("Vectorized vi...")
         self.vectorized_vi()
-        # print("done vi")
 
         optimal_rew, game_results = self.rollout_full_game_joint_optimal()
         return optimal_rew, game_results
 
 
+if __name__ == "__main__":
+    # [obj A placed in G1, object A in G2, B in G1, B in G2]:
+    # reward_weights = [1, -1, -1, 1]
 
-if __name__ == '__main__':
-    # reward_weights = [1, -1, -1, 1]  # [obj A placed in G1, object A in G2, B in G1, B in G2]
-
-    state = {
-        'start_pos': (0,0),
-        'g1': (4,4),
-        'g2': (4,0),
-        'square_positions': [(1,3), (2,0)],
-        'triangle_positions': [(3,2), (2,4)],
+    map_config = {
+        "agent_position": (0, 0),  # The agent's start position
+        "dimensions": [20, 20],
+        "g1": (4, 10),
+        "g2": (4, 0),
     }
+
+    mug = Mug()
+    fork = Fork()
+    object_list = [mug, fork]
     reward = {
-        'target_object': SQUARE,
-        'target_goal': 'g1',
+        "target_object": fork,
+        "target_goal": "g1",
     }
 
-    game = Gridworld(state, reward)
+    game = Gridworld(
+        map_config=map_config, objects=object_list, reward_dict=reward
+    )
     optimal_rew, game_results = game.compute_optimal_performance()
-    # pdb.set_trace()
-
-
