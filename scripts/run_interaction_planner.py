@@ -1,6 +1,10 @@
 import logging
 import os
+from os.path import join
 
+from adaptive_teaming.env.interaction_env import InteractionEnv
+from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
+from adaptive_teaming.utils.utils import pkl_dump, pkl_load
 import hydra
 from hydra.utils import to_absolute_path
 import numpy as np
@@ -14,22 +18,26 @@ def make_env(env_name, **kwargs):
         from adaptive_teaming.env import GridWorld
         from adaptive_teaming.utils.object import Fork, Mug
 
-        map_config = {
-            "agent_position": (0, 0),  # The agent's start position
-            "dimensions": [20, 20],
-            "possible_goals": {"G1": (4, 10), "G2": (4, 0)},
-        }
+        # map_config = {
+            # "agent_position": (0, 0),  # The agent's start position
+            # "dimensions": [20, 20],
+            # "possible_goals": {"G1": (4, 10), "G2": (4, 0)},
+        # }
 
-        mug = Mug()
-        fork = Fork()
-        object_list = [mug, fork]
-        reward = {
-            "target_object": fork,
-            "target_goal": "g1",
-        }
+        # mug = Mug()
+        # fork = Fork()
+        # object_list = [mug, fork]
+        # reward = {
+            # "target_object": fork,
+            # "target_goal": "g1",
+        # }
 
-        env = GridWorld(map_config=map_config,
-                        objects=object_list, reward_dict=reward)
+        # env = GridWorld(map_config=map_config,
+                        # objects=object_list, reward_dict=reward)
+        env = GridWorld(render_mode=kwargs["render_mode"])
+
+    else:
+        raise ValueError(f"Unknown environment: {env_name}")
 
     return env
 
@@ -65,16 +73,27 @@ def make_planner(cfg):
 def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")
 
-    env = make_env(cfg.env, **cfg[cfg.env])
+    env = make_env(cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none")
+    env.reset()
+    if cfg.collect_demo:
+        demo = collect_demo_in_gridworld(env)
+        pkl_dump(demo, f"{cfg.env}_demo.pkl")
+    else:
+        demo = pkl_load(join(cfg.data_dir, f"{cfg.env}_demo.pkl"))
 
+    from adaptive_teaming.skills.gridworld_skills import PickPlaceSkill
+    skill = PickPlaceSkill(demo)
+
+    __import__('ipdb').set_trace()
+    interaction_env = InteractionEnv(cfg.human_model, env)
 
     # tasks
     task_seq = [
-        {"shape": "s", "color": "red", "size": 300, "pos": [0, 0]},
-        {"shape": "s", "color": "blue", "size": 300, "pos": [0, 1]},
-        {"shape": "o", "color": "red", "size": 300, "pos": [1, 0]},
-        {"shape": "o", "color": "blue", "size": 300, "pos": [1, 0.5]},
-        {"shape": "o", "color": "green", "size": 300, "pos": [1.5, 0.5]},
+        {"obj_type": "Key", "obj_color": "red", "obj_scale": 1,},
+        {"obj_type": "Key", "obj_color": "blue", "obj_scale": 1,},
+        {"obj_type": "Box", "obj_color": "red", "obj_scale": 1,},
+        {"obj_type": "Key", "obj_color": "green", "obj_scale": 1,},
+        {"obj_type": "Ball", "obj_color": "yellow", "obj_scale": 1,},
     ]
 
     pref_params = {
@@ -82,6 +101,9 @@ def main(cfg):
         "G2": {"shape": "s", "color": "gray", "size": 2000, "pos": [1, -1]},
     }
 
+    for task in task_seq:
+        env.reset_to_state(task)
+        for _ in range(10): env.render()
 
     # squares together and circles together
     hum_prefs = ["G1", "G1", "G2", "G2", "G2"]

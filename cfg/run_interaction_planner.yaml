@@ -1,0 +1,49 @@
+defaults:
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+hydra:
+  sweep:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${planner}
+  job:
+    chdir: True
+
+wandb:
+  project: act_delegate_inquire
+  group: ${env}-${planner}
+
+env: gridworld
+planner: confidence_based_planner
+
+render: False
+collect_demo: False
+data_dir: data/${env}
+
+# Env configs
+gridworld:
+  map_config:
+  objects:
+  reward_dict:
+
+human_model:
+  demo_file: ${data_dir}/${env}_demo.pkl
+
+
+cost_cfg:
+  rob: 10
+  hum: 90
+  demo: 150
+  pref: 20
+  fail_cost: 100
+  pref_cost: 50
+
+# Planners
+
+#fc_mip_planner:
+
+#fc_ptas_planner:
+
+confidence_based_planner:
+  confidence_threshold: 0.5
+
