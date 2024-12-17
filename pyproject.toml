@@ -15,6 +15,9 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
+    "hydra-core",
+    "hydra_colorlog",
+    "wandb",
 ]
 
 [tool.setuptools]
