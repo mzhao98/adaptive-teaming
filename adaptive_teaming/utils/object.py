@@ -13,6 +13,7 @@ class Object:
         self,
         pose: Union[Dict, None] = None,
         dimensions: List = [4, 4],
+        color="blue",
     ):
         """Initialize the object.
 
@@ -33,6 +34,7 @@ class Object:
             self.pose = pose
         else:
             self.pose = pose
+        self.color = color
         self.start_pose = deepcopy(self.pose)
         self.set_coordinates()
 

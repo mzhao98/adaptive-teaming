@@ -23,14 +23,22 @@ class PickPlaceSkill:
 
         total_rew = 0
         gamma, discount = 1.0, 1.0
-        for action in self.plan:
-            if (action not in key_to_action):
+        for action in self.plans[0]:
+            if action not in key_to_action:
                 break
             action = key_to_action[action]
             obs, rew, term, trunc, info = env.step(action)
+            # TODO: check if collision happens and break wtih safety violation
             total_rew += discount * rew
             discount *= gamma
             done = term or trunc
-            if done: break
+            if done:
+                break
+            # if env.carrying:
+                # print("carrying pos: ", env.carrying.cur_pos)
 
+        info["safety_violated"] = False
+
+        # XXX we are not optimizing for the reward here.
+        # The true reward is the human's preference which is not available to the robot.
         return obs, total_rew, done, info
