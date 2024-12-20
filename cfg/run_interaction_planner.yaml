@@ -19,6 +19,7 @@ planner: confidence_based_planner
 render: False
 collect_demo: False
 data_dir: data/${env}
+vis_tasks: False
 
 # Env configs
 gridworld:
@@ -31,12 +32,12 @@ human_model:
 
 
 cost_cfg:
-  rob: 10
-  hum: 90
-  demo: 150
-  pref: 20
-  fail_cost: 100
-  pref_cost: 50
+  ROBOT: 10
+  HUMAN: 90
+  ASK_SKILL: 150
+  ASK_PREF: 20
+  FAIL: 100
+  PREF_COST: 50
 
 # Planners
 

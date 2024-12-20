@@ -17,6 +17,7 @@ dependencies = [
     "numpy",
     "hydra-core",
     "hydra_colorlog",
+    "tqdm",
     "wandb",
 ]
 
