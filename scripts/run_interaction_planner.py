@@ -2,12 +2,11 @@ import logging
 import os
 from os.path import join
 
-from adaptive_teaming.env.interaction_env import InteractionEnv
+import hydra
+import numpy as np
 from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
 from adaptive_teaming.utils.utils import pkl_dump, pkl_load
-import hydra
 from hydra.utils import to_absolute_path
-import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -16,24 +15,7 @@ logger.setLevel(logging.INFO)
 def make_env(env_name, **kwargs):
     if env_name == "gridworld":
         from adaptive_teaming.env import GridWorld
-        from adaptive_teaming.utils.object import Fork, Mug
 
-        # map_config = {
-            # "agent_position": (0, 0),  # The agent's start position
-            # "dimensions": [20, 20],
-            # "possible_goals": {"G1": (4, 10), "G2": (4, 0)},
-        # }
-
-        # mug = Mug()
-        # fork = Fork()
-        # object_list = [mug, fork]
-        # reward = {
-            # "target_object": fork,
-            # "target_goal": "g1",
-        # }
-
-        # env = GridWorld(map_config=map_config,
-                        # objects=object_list, reward_dict=reward)
         env = GridWorld(render_mode=kwargs["render_mode"])
 
     else:
@@ -49,22 +31,123 @@ def make_belief_estimator(cfg, env, task_seq):
         return GridWorldBeliefEstimator(env, task_seq)
 
 
-def make_planner(cfg):
-    planner_cfg = cfg[cfg.planner]
+def make_planner(interaction_env, belief_estimator, cfg):
     if cfg.planner == "fc_mip_planner":
         from adaptive_teaming.planner import FacilityLocationPlanner
 
+        planner_cfg = cfg[cfg.planner]
         planner = FacilityLocationPlanner(cfg)
     elif cfg.planner == "fc_greedy_planner":
         planner = FacilityLocationGreedyPlanner(cfg)
     elif cfg.planner == "confidence_based_planner":
         from adaptive_teaming.planner import ConfidenceBasedPlanner
 
-        planner = ConfidenceBasedPlanner(planner_cfg, cfg.cost_cfg)
+        planner_cfg = cfg[cfg.planner]
+        planner = ConfidenceBasedPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
+    elif cfg.planner == "always_human":
+        from adaptive_teaming.planner import AlwaysHuman
+
+        planner = AlwaysHuman(
+            interaction_env, belief_estimator, None, cfg.cost_cfg)
+    elif cfg.planner == "always_learn":
+        from adaptive_teaming.planner import AlwaysLearn
+
+        planner = AlwaysLearn(
+            interaction_env, belief_estimator, None, cfg.cost_cfg)
+    elif cfg.planner == "learn_then_robot":
+        from adaptive_teaming.planner import LearnThenRobot
+
+        planner = LearnThenRobot(
+            interaction_env, belief_estimator, None, cfg.cost_cfg)
     else:
         raise ValueError(f"Unknown planner: {cfg.planner}")
 
     return planner
+
+
+def init_domain(cfg):
+    if cfg.collect_demo:
+        env = make_env(
+            cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none"
+        )
+        env.reset()
+        demo_tasks = [
+            {
+                "obj_type": "Key",
+                "obj_color": "red",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+        ]
+
+        demos = collect_demo_in_gridworld(env, demo_tasks)
+        pkl_dump(demos, f"{cfg.env}_demo.pkl")
+    else:
+        demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demo.pkl"))
+
+    env = make_env(
+        cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none"
+    )
+    env.reset()
+    if cfg.env == "gridworld":
+        from adaptive_teaming.env import GridWorldInteractionEnv
+
+        interaction_env = GridWorldInteractionEnv(
+            env, cfg.human_model, cfg.cost_cfg)
+    else:
+        raise ValueError(f"Unknown environment: {cfg.env}")
+
+    interaction_env.load_human_demos(demos)
+
+    return env, interaction_env
+
+
+def generate_tasks(cfg):
+    if cfg.env == "gridworld":
+        task_seq = [
+            {
+                "obj_type": "Key",
+                "obj_color": "red",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "blue",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Box",
+                "obj_color": "red",
+                "obj_scale": 1,
+                "position": (3, 2),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Ball",
+                "obj_color": "yellow",
+                "obj_scale": 1,
+                "position": (3, 3),
+            },
+        ]
+    else:
+        raise ValueError(f"Unknown environment: {cfg.env}")
+    return task_seq
+
+
+def vis_tasks(env, task_seq):
+    for task in task_seq:
+        env.reset_to_state(task)
+        for _ in range(10):
+            env.render()
 
 
 @hydra.main(
@@ -73,43 +156,19 @@ def make_planner(cfg):
 def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")
 
-    env = make_env(cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none")
-    env.reset()
-    if cfg.collect_demo:
-        demo = collect_demo_in_gridworld(env)
-        pkl_dump(demo, f"{cfg.env}_demo.pkl")
-    else:
-        demo = pkl_load(join(cfg.data_dir, f"{cfg.env}_demo.pkl"))
+    env, interaction_env = init_domain(cfg)
 
-    from adaptive_teaming.skills.gridworld_skills import PickPlaceSkill
-    skill = PickPlaceSkill(demo)
+    task_seq = generate_tasks(cfg)
+    if cfg.vis_tasks:
+        vis_tasks(env, task_seq)
 
-    __import__('ipdb').set_trace()
-    interaction_env = InteractionEnv(cfg.human_model, env)
+    interaction_env.reset(task_seq)
 
-    # tasks
-    task_seq = [
-        {"obj_type": "Key", "obj_color": "red", "obj_scale": 1,},
-        {"obj_type": "Key", "obj_color": "blue", "obj_scale": 1,},
-        {"obj_type": "Box", "obj_color": "red", "obj_scale": 1,},
-        {"obj_type": "Key", "obj_color": "green", "obj_scale": 1,},
-        {"obj_type": "Ball", "obj_color": "yellow", "obj_scale": 1,},
-    ]
-
-    pref_params = {
-        "G1": {"shape": "s", "color": "gray", "size": 2000, "pos": [-1, 1]},
-        "G2": {"shape": "s", "color": "gray", "size": 2000, "pos": [1, -1]},
-    }
-
-    for task in task_seq:
-        env.reset_to_state(task)
-        for _ in range(10): env.render()
-
-    # squares together and circles together
-    hum_prefs = ["G1", "G1", "G2", "G2", "G2"]
     belief_estimator = make_belief_estimator(cfg, env, task_seq)
-    planner = make_planner(cfg)
+    planner = make_planner(interaction_env, belief_estimator, cfg)
+    planner.rollout_interaction(task_seq, None, None)
 
+    return
     __import__("ipdb").set_trace()
 
     # fig = plt.figure(figsize=(10, 10))
