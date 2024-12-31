@@ -33,18 +33,21 @@ human_model:
 
 cost_cfg:
   ROBOT: 10
-  HUMAN: 90
-  ASK_SKILL: 150
-  ASK_PREF: 20
+  HUMAN: 50
+  ASK_SKILL: 100
+  ASK_PREF: 10
   FAIL: 100
-  PREF_COST: 50
+  PREF_COST: 100
 
 # Planners
 
-#fc_mip_planner:
+fc_pref_planner:
 
 #fc_ptas_planner:
 
 confidence_based_planner:
   confidence_threshold: 0.5
+
+fixed_planner:
+  plan: ["ASK_SKILL", "ROBOT", "HUMAN", "ROBOT", "HUMAN"]
 

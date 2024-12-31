@@ -1,4 +1,6 @@
-from .facility_location_planner import FacilityLocationPlanner
+from .base_planner import (AlwaysHuman, AlwaysLearn, FixedPlanner,
+                           InteractionPlanner, LearnThenRobot)
 from .confidence_based_planner import ConfidenceBasedPlanner
+from .facility_location_planner import (FacilityLocationPlanner,
+                                        FacilityLocationPrefPlanner)
 from .pref_belief_estimator import GridWorldBeliefEstimator
-from .base_planner import InteractionPlanner, AlwaysHuman, AlwaysLearn, LearnThenRobot

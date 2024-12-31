@@ -1,6 +1,7 @@
 import logging
 import os
 from os.path import join
+from PIL import Image
 
 import hydra
 import numpy as np
@@ -36,9 +37,16 @@ def make_planner(interaction_env, belief_estimator, cfg):
         from adaptive_teaming.planner import FacilityLocationPlanner
 
         planner_cfg = cfg[cfg.planner]
-        planner = FacilityLocationPlanner(cfg)
-    elif cfg.planner == "fc_greedy_planner":
-        planner = FacilityLocationGreedyPlanner(cfg)
+        planner = FacilityLocationPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
+    elif cfg.planner == "fc_pref_planner":
+        from adaptive_teaming.planner import FacilityLocationPrefPlanner
+
+        planner_cfg = cfg[cfg.planner]
+        planner = FacilityLocationPrefPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
     elif cfg.planner == "confidence_based_planner":
         from adaptive_teaming.planner import ConfidenceBasedPlanner
 
@@ -61,6 +69,13 @@ def make_planner(interaction_env, belief_estimator, cfg):
 
         planner = LearnThenRobot(
             interaction_env, belief_estimator, None, cfg.cost_cfg)
+    elif cfg.planner == "fixed_planner":
+        from adaptive_teaming.planner import FixedPlanner
+
+        planner_cfg = cfg[cfg.planner]
+        planner = FixedPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
     else:
         raise ValueError(f"Unknown planner: {cfg.planner}")
 
@@ -80,12 +95,18 @@ def init_domain(cfg):
                 "obj_scale": 1,
                 "position": (3, 1),
             },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
         ]
 
         demos = collect_demo_in_gridworld(env, demo_tasks)
-        pkl_dump(demos, f"{cfg.env}_demo.pkl")
+        pkl_dump(demos, f"{cfg.env}_demos.pkl")
     else:
-        demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demo.pkl"))
+        demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demos.pkl"))
 
     env = make_env(
         cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none"
@@ -107,6 +128,12 @@ def init_domain(cfg):
 def generate_tasks(cfg):
     if cfg.env == "gridworld":
         task_seq = [
+            {
+                "obj_type": "Key",
+                "obj_color": "red",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
             {
                 "obj_type": "Key",
                 "obj_color": "red",
@@ -137,6 +164,42 @@ def generate_tasks(cfg):
                 "obj_scale": 1,
                 "position": (3, 3),
             },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Ball",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 3),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "red",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
+            {
+                "obj_type": "Key",
+                "obj_color": "green",
+                "obj_scale": 1,
+                "position": (3, 1),
+            },
         ]
     else:
         raise ValueError(f"Unknown environment: {cfg.env}")
@@ -144,10 +207,37 @@ def generate_tasks(cfg):
 
 
 def vis_tasks(env, task_seq):
-    for task in task_seq:
-        env.reset_to_state(task)
+    vis_together = False
+    if vis_together:
+        from adaptive_teaming.env.gridworld import OBJECT_TYPES
+
+        # visualize in the same env
+        # env.render_mode = "rgb_array"
+        for task in task_seq:
+            # env.reset_to_state(task)
+            obj = OBJECT_TYPES[task["obj_type"]](task["obj_color"])
+            env.objects.append({"object": obj, "position": task["position"]})
+
+        env.reset()
         for _ in range(10):
             env.render()
+        __import__('ipdb').set_trace()
+    else:
+        for task in task_seq:
+            env.reset_to_state(task)
+            for _ in range(10):
+                env.render()
+
+
+def save_task_imgs(env, task_seq):
+    render_mode = env.render_mode
+    env.render_mode = "rgb_array"
+    os.makedirs("tasks")
+    for i, task in enumerate(task_seq):
+        env.reset_to_state(task)
+        img = Image.fromarray(env.render())
+        img.save(f"tasks/task_{i}.png")
+    env.render_mode = render_mode
 
 
 @hydra.main(
@@ -157,16 +247,20 @@ def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")
 
     env, interaction_env = init_domain(cfg)
+    env.render()
 
     task_seq = generate_tasks(cfg)
     if cfg.vis_tasks:
         vis_tasks(env, task_seq)
+    save_task_imgs(env, task_seq)
 
     interaction_env.reset(task_seq)
 
     belief_estimator = make_belief_estimator(cfg, env, task_seq)
     planner = make_planner(interaction_env, belief_estimator, cfg)
-    planner.rollout_interaction(task_seq, None, None)
+    planner.rollout_interaction(
+        task_seq, interaction_env.task_similarity, interaction_env.pref_similarity
+    )
 
     return
     __import__("ipdb").set_trace()
