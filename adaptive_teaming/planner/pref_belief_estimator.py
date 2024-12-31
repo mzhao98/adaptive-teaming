@@ -1,5 +1,5 @@
-from abc import abstractmethod
 import logging
+from abc import abstractmethod
 
 import numpy as np
 
@@ -42,14 +42,20 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
         """
         Update belief
         """
-        for task, belief in zip(self.task_seq[task_id:], self.beliefs[task_id:]):
+        # immediately converges to 1 after a preference query
+        pref = obs["pref"]
+        pref_idx = self._pref_to_idx(pref)
+        self.beliefs[task_id][pref_idx] = 1
+        for task, belief in zip(self.task_seq[task_id+1:],
+                                self.beliefs[task_id+1:]):
             task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
+            if task_sim:
+                belief[pref_idx] = 1
             # bayesian update of the belief
             # XXX fix this
-            pref = obs["pref"]
-            pref_idx = self._pref_to_idx(pref)
-            belief[pref_idx] +=  task_sim
-            belief /= belief.sum()
+            # belief[pref_idx] += task_sim
+
+            # belief /= belief.sum()
 
     def _pref_to_idx(self, pref):
         return list(self.env.pref_space).index(pref)
@@ -59,6 +65,9 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
         Task similarity function
         """
         if task1["obj_type"] == task2["obj_type"]:
-            return 1
+            if task1["obj_color"] == task2["obj_color"]:
+                return 1
+            else:
+                return 0
         else:
             return 0
