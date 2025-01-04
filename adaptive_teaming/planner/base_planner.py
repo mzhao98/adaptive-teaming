@@ -6,8 +6,8 @@ from pprint import pformat
 import numpy as np
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.INFO)
 
 
 class InteractionPlanner(ABC):
@@ -103,7 +103,14 @@ class InteractionPlanner(ABC):
 
             task_id = info["current_task_id"]
 
+        logger.info("Interaction statistics:")
+        logger.info("-----------------------")
         logger.info(f"  Total reward: {total_rew}")
+        logger.info("  Actions executed:")
+        logger.info(f"   #teach: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_SKILL'])}")
+        logger.info(f"   #human: {sum([1 for a in executed_actions if a['action_type'] == 'HUMAN'])}")
+        logger.info(f"   #pref: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_PREF'])}")
+        logger.info(f"   #robot: {sum([1 for a in executed_actions if a['action_type'] == 'ROBOT'])}")
 
 
 class AlwaysHuman(InteractionPlanner):

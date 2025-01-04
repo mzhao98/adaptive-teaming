@@ -23,9 +23,6 @@ vis_tasks: False
 
 # Env configs
 gridworld:
-  map_config:
-  objects:
-  reward_dict:
 
 human_model:
   demo_file: ${data_dir}/${env}_demo.pkl
@@ -46,7 +43,7 @@ fc_pref_planner:
 #fc_ptas_planner:
 
 confidence_based_planner:
-  confidence_threshold: 0.5
+  confidence_threshold: 0.8
 
 fixed_planner:
   plan: ["ASK_SKILL", "ROBOT", "HUMAN", "ROBOT", "HUMAN"]

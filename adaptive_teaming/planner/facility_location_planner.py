@@ -12,8 +12,8 @@ from .base_planner import InteractionPlanner
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-# logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # planner_type = "informed_greedy"
 # planner_type = "greedy"
@@ -405,6 +405,41 @@ class FacilityLocationPrefPlanner(FacilityLocationPlanner):
         else:
             logger.debug("  Not asking for preference")
             return plan1, plan_info1
+
+
+class ConfidenceBasedFacilityLocationPlanner(FacilityLocationPlanner):
+    """
+    Uses the facility location planner to decide among learn, human and robot.
+    Decides whether or not to ask for preference based on the confidence in the
+    preference belief.
+    """
+
+    def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
+        super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
+
+    def plan(
+        self,
+        task_seq,
+        pref_beliefs,
+        task_similarity_fn,
+        pref_similarity_fn,
+        current_task_id,
+    ):
+        plan, plan_info = super().plan(
+            task_seq,
+            pref_beliefs,
+            task_similarity_fn,
+            pref_similarity_fn,
+            current_task_id,
+        )
+        # return plan1, plan_info1
+        # compute plan with updated belief
+        pref_belief = pref_beliefs[current_task_id]
+        logger.debug(f"  Pref belief: {pref_beliefs[current_task_id:]}")
+        if np.max(pref_belief) < self.planner_cfg["confidence_threshold"]:
+            logger.debug("  Asking for preference")
+            plan[0] = {"action_type": "ASK_PREF"}
+        return plan, plan_info
 
 
 def vis_world(world_state, fig=None):
