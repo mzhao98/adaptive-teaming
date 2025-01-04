@@ -1,23 +1,39 @@
 import logging
 import os
 from os.path import join
-from PIL import Image
 
 import hydra
 import numpy as np
 from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
 from adaptive_teaming.utils.utils import pkl_dump, pkl_load
 from hydra.utils import to_absolute_path
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def make_env(env_name, **kwargs):
+def make_env(env_name, cfg):
     if env_name == "gridworld":
         from adaptive_teaming.env import GridWorld
 
-        env = GridWorld(render_mode=kwargs["render_mode"])
+        env = GridWorld(render_mode="human" if cfg.render else "none")
+
+    elif env_name == "pick_place":
+
+        from adaptive_teaming.env.pick_place import PickPlaceEnv
+
+        # env_args = dict(
+            # env_name=env_name,
+            # robots="panda",
+            # has_renderer=cfg.render,
+            # has_offscreen_renderer=True,
+            # ignore_done=True,
+            # use_camera_obs=False,
+            # control_freq=20,
+            # controller_configs=load_controller_config(default_controller="OSC_POSE"),
+        # )
+        env = PickPlaceEnv(has_renderer=cfg.render)
 
     else:
         raise ValueError(f"Unknown environment: {env_name}")
@@ -48,10 +64,11 @@ def make_planner(interaction_env, belief_estimator, cfg):
             interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
         )
     elif cfg.planner == "confidence_based_planner":
-        from adaptive_teaming.planner import ConfidenceBasedPlanner
+        from adaptive_teaming.planner import \
+            ConfidenceBasedFacilityLocationPlanner
 
         planner_cfg = cfg[cfg.planner]
-        planner = ConfidenceBasedPlanner(
+        planner = ConfidenceBasedFacilityLocationPlanner(
             interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
         )
     elif cfg.planner == "always_human":
@@ -84,34 +101,38 @@ def make_planner(interaction_env, belief_estimator, cfg):
 
 def init_domain(cfg):
     if cfg.collect_demo:
-        env = make_env(
-            cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none"
-        )
+        env = make_env(cfg.env, cfg)
         env.reset()
-        demo_tasks = [
-            {
-                "obj_type": "Key",
-                "obj_color": "red",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-        ]
+        if cfg.env == "gridworld":
+            demo_tasks = [
+                {
+                    "obj_type": "Key",
+                    "obj_color": "red",
+                    "obj_scale": 1,
+                    "position": (3, 1),
+                },
+                {
+                    "obj_type": "Key",
+                    "obj_color": "green",
+                    "obj_scale": 1,
+                    "position": (3, 1),
+                },
+            ]
+
+        else:
+            raise ValueError(f"Unknown environment: {cfg.env}")
 
         demos = collect_demo_in_gridworld(env, demo_tasks)
         pkl_dump(demos, f"{cfg.env}_demos.pkl")
     else:
-        demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demos.pkl"))
+        if cfg.env == "gridworld":
+            demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demos.pkl"))
+        else:
+            logger.warning("Not loading demos from file.")
 
-    env = make_env(
-        cfg.env, **cfg[cfg.env], render_mode="human" if cfg.render else "none"
-    )
+    env = make_env(cfg.env, cfg)
     env.reset()
+    __import__('ipdb').set_trace()
     if cfg.env == "gridworld":
         from adaptive_teaming.env import GridWorldInteractionEnv
 
@@ -221,7 +242,7 @@ def vis_tasks(env, task_seq):
         env.reset()
         for _ in range(10):
             env.render()
-        __import__('ipdb').set_trace()
+        __import__("ipdb").set_trace()
     else:
         for task in task_seq:
             env.reset_to_state(task)
@@ -249,6 +270,7 @@ def main(cfg):
     env, interaction_env = init_domain(cfg)
     env.render()
 
+    __import__("ipdb").set_trace()
     task_seq = generate_tasks(cfg)
     if cfg.vis_tasks:
         vis_tasks(env, task_seq)
