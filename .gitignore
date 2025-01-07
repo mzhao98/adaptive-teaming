@@ -57,6 +57,9 @@ cover/
 *.mo
 *.pot
 
+# Hydra stuff:
+**/outputs/*
+
 # Django stuff:
 *.log
 local_settings.py
