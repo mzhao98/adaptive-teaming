@@ -126,7 +126,22 @@ def init_domain(cfg):
         pkl_dump(demos, f"{cfg.env}_demos.pkl")
     else:
         if cfg.env == "gridworld":
-            demos = pkl_load(join(cfg.data_dir, f"{cfg.env}_demos.pkl"))
+            data_files = join(cfg.data_dir, f"{cfg.env}_demos.pkl")
+            data_path = (
+                os.path.dirname(os.path.realpath(__file__))
+                + "/../"
+                + cfg.data_dir
+            )
+
+            if os.path.isdir(data_path):
+                try:
+                    demos = pkl_load(data_files)
+                except FileNotFoundError:
+                    logger.error(f"There's no data in {cfg.data_dir}")
+                    exit(f"\nThere's no data in {cfg.data_dir}. Terminating.\n")
+            else:
+                logger.error(f"The path to the data ({data_path}) is erroneous.")
+                exit(f"See if {cfg.data_dir} exists.")
         else:
             logger.warning("Not loading demos from file.")
 
