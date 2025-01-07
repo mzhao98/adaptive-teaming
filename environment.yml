@@ -1,0 +1,11 @@
+name: adaptive_teaming
+channels:
+  - conda-forge
+dependencies:
+  - hydra-core
+  - matplotlib
+  - networkx
+  - pudb
+  - pip:
+    - adaptive_teaming==0.1
+    - minigrid==3.0.0
