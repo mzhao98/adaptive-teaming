@@ -1,11 +1,14 @@
 name: adaptive_teaming
 channels:
   - conda-forge
+  - gurobi
 dependencies:
+  - gurobi
   - hydra-core
   - matplotlib
   - networkx
+  - pip
   - pudb
+  - python==3.12
   - pip:
-    - adaptive_teaming==0.1
     - minigrid==3.0.0
