@@ -15,13 +15,13 @@ logger.setLevel(logging.INFO)
 
 def make_env(env_name, cfg):
     if env_name == "gridworld":
-        from adaptive_teaming.env import GridWorld
+        from adaptive_teaming.envs import GridWorld
 
         env = GridWorld(render_mode="human" if cfg.render else "none")
 
     elif env_name == "pick_place":
 
-        from adaptive_teaming.env.pick_place import PickPlaceEnv
+        from adaptive_teaming.envs.pick_place import PickPlaceEnv
 
         # env_args = dict(
             # env_name=env_name,
@@ -132,7 +132,7 @@ def init_domain(cfg):
 
     env = make_env(cfg.env, cfg)
     env.reset()
-    __import__('ipdb').set_trace()
+    # __import__('ipdb').set_trace()
     if cfg.env == "gridworld":
         from adaptive_teaming.env import GridWorldInteractionEnv
 
@@ -270,7 +270,7 @@ def main(cfg):
     env, interaction_env = init_domain(cfg)
     env.render()
 
-    __import__("ipdb").set_trace()
+    # __import__("ipdb").set_trace()
     task_seq = generate_tasks(cfg)
     if cfg.vis_tasks:
         vis_tasks(env, task_seq)
@@ -285,7 +285,6 @@ def main(cfg):
     )
 
     return
-    __import__("ipdb").set_trace()
 
     # fig = plt.figure(figsize=(10, 10))
     # ax = fig.add_subplot(1, 2, 1)
