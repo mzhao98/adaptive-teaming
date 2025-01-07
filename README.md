@@ -19,3 +19,9 @@
     1. ``mamba activate adaptive-teaming`` **OR** ``conda activate adaptive-teaming``
     1. ``pip install -e .``
 
+## Sample experiment
+1. From the commandline, enter the top directory (``adaptive-teaming/``) and execute:
+
+   ```bash
+   python scripts/run_interaction_planner.py env=gridworld render=True
+   ```
