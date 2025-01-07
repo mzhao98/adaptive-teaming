@@ -134,7 +134,7 @@ def init_domain(cfg):
     env.reset()
     # __import__('ipdb').set_trace()
     if cfg.env == "gridworld":
-        from adaptive_teaming.env import GridWorldInteractionEnv
+        from adaptive_teaming.envs import GridWorldInteractionEnv
 
         interaction_env = GridWorldInteractionEnv(
             env, cfg.human_model, cfg.cost_cfg)
