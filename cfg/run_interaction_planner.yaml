@@ -19,6 +19,7 @@ planner: confidence_based_planner
 render: False
 collect_demo: False
 data_dir: data/${env}
+seed: 42
 vis_tasks: False
 
 # Env configs
@@ -27,6 +28,8 @@ gridworld:
 human_model:
   demo_file: ${data_dir}/${env}_demo.pkl
 
+task_seq:
+  num_tasks: 10
 
 cost_cfg:
   ROBOT: 10

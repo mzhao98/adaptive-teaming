@@ -1,2 +1,3 @@
 from .gridworld import GridWorld
 from .gridworld_interaction_env import GridWorldInteractionEnv
+from .pick_place_interaction_env import PickPlaceInteractionEnv

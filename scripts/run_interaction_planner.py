@@ -1,6 +1,7 @@
 import logging
 import os
 from os.path import join
+import random
 
 import hydra
 import numpy as np
@@ -24,14 +25,14 @@ def make_env(env_name, cfg):
         from adaptive_teaming.envs.pick_place import PickPlaceEnv
 
         # env_args = dict(
-            # env_name=env_name,
-            # robots="panda",
-            # has_renderer=cfg.render,
-            # has_offscreen_renderer=True,
-            # ignore_done=True,
-            # use_camera_obs=False,
-            # control_freq=20,
-            # controller_configs=load_controller_config(default_controller="OSC_POSE"),
+        # env_name=env_name,
+        # robots="panda",
+        # has_renderer=cfg.render,
+        # has_offscreen_renderer=True,
+        # ignore_done=True,
+        # use_camera_obs=False,
+        # control_freq=20,
+        # controller_configs=load_controller_config(default_controller="OSC_POSE"),
         # )
         env = PickPlaceEnv(has_renderer=cfg.render)
 
@@ -125,25 +126,22 @@ def init_domain(cfg):
         demos = collect_demo_in_gridworld(env, demo_tasks)
         pkl_dump(demos, f"{cfg.env}_demos.pkl")
     else:
-        if cfg.env == "gridworld":
-            data_files = join(cfg.data_dir, f"{cfg.env}_demos.pkl")
-            data_path = (
-                os.path.dirname(os.path.realpath(__file__))
-                + "/../"
-                + cfg.data_dir
-            )
+        # if cfg.env == "gridworld":
+        data_files = join(cfg.data_dir, f"{cfg.env}_demos.pkl")
+        data_path = os.path.dirname(
+            os.path.realpath(__file__)) + "/../" + cfg.data_dir
 
-            if os.path.isdir(data_path):
-                try:
-                    demos = pkl_load(data_files)
-                except FileNotFoundError:
-                    logger.error(f"There's no data in {cfg.data_dir}")
-                    exit(f"\nThere's no data in {cfg.data_dir}. Terminating.\n")
-            else:
-                logger.error(f"The path to the data ({data_path}) is erroneous.")
-                exit(f"See if {cfg.data_dir} exists.")
+        if os.path.isdir(data_path):
+            try:
+                demos = pkl_load(data_files)
+            except FileNotFoundError:
+                logger.error(f"There's no data in {cfg.data_dir}")
+                exit(f"\nThere's no data in {cfg.data_dir}. Terminating.\n")
         else:
-            logger.warning("Not loading demos from file.")
+            logger.error(f"The path to the data ({data_path}) is erroneous.")
+            exit(f"See if {cfg.data_dir} exists.")
+        # else:
+        # logger.warning("Not loading demos from file.")
 
     env = make_env(cfg.env, cfg)
     env.reset()
@@ -153,6 +151,11 @@ def init_domain(cfg):
 
         interaction_env = GridWorldInteractionEnv(
             env, cfg.human_model, cfg.cost_cfg)
+    elif cfg.env == "pick_place":
+        from adaptive_teaming.envs import PickPlaceInteractionEnv
+
+        interaction_env = PickPlaceInteractionEnv(
+            env, cfg.human_model, cfg.cost_cfg)
     else:
         raise ValueError(f"Unknown environment: {cfg.env}")
 
@@ -161,7 +164,16 @@ def init_domain(cfg):
     return env, interaction_env
 
 
-def generate_tasks(cfg):
+def set_seeds(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+def generate_task_seqs(cfg, n_seqs=1, seed=42):
+    # set the seed
+    set_seeds(seed)
+    np.random.seed(seed)
+
     if cfg.env == "gridworld":
         task_seq = [
             {
@@ -237,9 +249,15 @@ def generate_tasks(cfg):
                 "position": (3, 1),
             },
         ]
+        task_seqs = [task_seq]
+    elif cfg.env == "pick_place":
+        from adaptive_teaming.envs.pick_place import PickPlaceTaskSeqGen
+
+        env = PickPlaceTaskSeqGen(cfg.task_seq, has_renderer=cfg.render)
+        task_seqs = env.generate_task_seq(n_seqs)
     else:
         raise ValueError(f"Unknown environment: {cfg.env}")
-    return task_seq
+    return task_seqs
 
 
 def vis_tasks(env, task_seq):
@@ -283,15 +301,26 @@ def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")
 
     env, interaction_env = init_domain(cfg)
-    env.render()
+    env.reset()
 
     # __import__("ipdb").set_trace()
-    task_seq = generate_tasks(cfg)
-    if cfg.vis_tasks:
+    task_seqs = generate_task_seqs(cfg, n_seqs=1, seed=cfg.seed)
+    task_seq = task_seqs[0]
+
+    for _ in range(100): env.render()
+    if cfg.env == "gridworld" and cfg.vis_tasks:
         vis_tasks(env, task_seq)
-    save_task_imgs(env, task_seq)
+        save_task_imgs(env, task_seq)
+
+    elif cfg.env == "pick_place":
+        for task in task_seq:
+            env.reset_to_state(task)
+            for _ in range(50):
+                env.render()
 
     interaction_env.reset(task_seq)
+
+    __import__('ipdb').set_trace()
 
     belief_estimator = make_belief_estimator(cfg, env, task_seq)
     planner = make_planner(interaction_env, belief_estimator, cfg)
