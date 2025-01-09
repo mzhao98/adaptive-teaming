@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import logging
 from copy import copy
-
+import pdb
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +71,8 @@ class InteractionEnv:
         # env reward is irrelevant
         rew = 0
         if info["safety_violated"]:
-            rew -= 100
+            # rew -= 100 # I think this should be fail cost
+            rew -= self.cost_cfg['FAIL']
 
         human_sat = self.human_evaluation_of_robot(
             None)
@@ -82,12 +83,12 @@ class InteractionEnv:
 
     # human model
     # -------------
-    def human_step(self, task=None):
+    def human_step(self, human_pref, task=None):
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
         for _ in range(10):
             self.env.render()
-        return None, rew, True, {}
+        return None, rew, True, {'pref':human_pref}
 
     def query_skill(self, task, pref):
         """
@@ -118,6 +119,7 @@ class InteractionEnv:
         rew = -self.cost_cfg["ASK_PREF"]
         for _ in range(10):
             self.env.render()
+        # pdb.set_trace()
         return None, rew, True, {}
 
     @abstractmethod

@@ -2,23 +2,31 @@ import logging
 import os
 from os.path import join
 import random
-
+import pdb
 import hydra
 import numpy as np
 from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
 from adaptive_teaming.utils.utils import pkl_dump, pkl_load
 from hydra.utils import to_absolute_path
 from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
 def make_env(env_name, cfg):
+    print(f"Creating environment: {env_name}")
     if env_name == "gridworld":
         from adaptive_teaming.envs import GridWorld
 
         env = GridWorld(render_mode="human" if cfg.render else "none")
+
+    elif env_name == "med_gridworld":
+        from adaptive_teaming.envs import MediumGridWorld
+
+        env = MediumGridWorld(render_mode="human" if cfg.render else "none")
 
     elif env_name == "pick_place":
 
@@ -44,6 +52,11 @@ def make_env(env_name, cfg):
 
 def make_belief_estimator(cfg, env, task_seq):
     if cfg.env == "gridworld":
+        from adaptive_teaming.planner import GridWorldBeliefEstimator
+
+        return GridWorldBeliefEstimator(env, task_seq)
+
+    elif cfg.env == "med_gridworld":
         from adaptive_teaming.planner import GridWorldBeliefEstimator
 
         return GridWorldBeliefEstimator(env, task_seq)
@@ -142,7 +155,6 @@ def init_domain(cfg):
             exit(f"See if {cfg.data_dir} exists.")
         # else:
         # logger.warning("Not loading demos from file.")
-
     env = make_env(cfg.env, cfg)
     env.reset()
     # __import__('ipdb').set_trace()
@@ -151,6 +163,13 @@ def init_domain(cfg):
 
         interaction_env = GridWorldInteractionEnv(
             env, cfg.human_model, cfg.cost_cfg)
+
+    elif cfg.env == "med_gridworld":
+        from adaptive_teaming.envs import GridWorldInteractionEnv
+
+        interaction_env = GridWorldInteractionEnv(
+            env, cfg.human_model, cfg.cost_cfg)
+
     elif cfg.env == "pick_place":
         from adaptive_teaming.envs import PickPlaceInteractionEnv
 
@@ -168,6 +187,51 @@ def set_seeds(seed=42):
     random.seed(seed)
     np.random.seed(seed)
 
+
+def randomize_gridworld_task_seq(env, cfg, n_objs=10, seed=42, gridsize=8):
+
+
+    acceptable_locations = env.get_acceptable_obj_locations()
+    if env.agent_start_pos in acceptable_locations:
+        acceptable_locations.remove(env.agent_start_pos)
+
+    # set the seed
+    set_seeds(seed)
+    np.random.seed(seed)
+
+    # randomly assign objects to locations
+    objs_list = ["Key", "Box", "Ball"]
+    colors_list = ["red", "green", "blue", "yellow"]
+
+    # create a list of n_objs objects
+    objs_present = []
+    for i in range(n_objs):
+        objs_present.append((random.choice(objs_list), random.choice(colors_list)))
+
+    # randomly assign locations to each object type and color
+    unique_objs = list(set(objs_present))
+    print(f"Unique objects: {unique_objs}")
+
+    # randomly assign locations to each object type and color
+    location_assignments = np.random.choice(len(acceptable_locations), len(unique_objs), replace=False)
+
+    # create dictionary of object type and color to location
+    obj_to_location = {}
+    for i, obj in enumerate(unique_objs):
+        obj_to_location[obj] = acceptable_locations[location_assignments[i]]
+
+    # create a task sequence
+    task_seq = []
+    for i, obj in enumerate(objs_present):
+        task = {
+            "obj_type": obj[0],
+            "obj_color": obj[1],
+            "obj_scale": 1,
+            "position": obj_to_location[(obj[0], obj[1])],
+        }
+        task_seq.append(task)
+
+    return [task_seq]
 
 def generate_task_seqs(cfg, n_seqs=1, seed=42):
     # set the seed
@@ -190,64 +254,70 @@ def generate_task_seqs(cfg, n_seqs=1, seed=42):
             },
             {
                 "obj_type": "Key",
-                "obj_color": "blue",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Box",
-                "obj_color": "red",
-                "obj_scale": 1,
-                "position": (3, 2),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Ball",
                 "obj_color": "yellow",
                 "obj_scale": 1,
-                "position": (3, 3),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
                 "position": (3, 1),
             },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Ball",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 3),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "red",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
-            {
-                "obj_type": "Key",
-                "obj_color": "green",
-                "obj_scale": 1,
-                "position": (3, 1),
-            },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "blue",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Box",
+            #     "obj_color": "red",
+            #     "obj_scale": 1,
+            #     "position": (3, 2),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Ball",
+            #     "obj_color": "yellow",
+            #     "obj_scale": 1,
+            #     "position": (3, 3),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Ball",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 3),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "red",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
+            # {
+            #     "obj_type": "Key",
+            #     "obj_color": "green",
+            #     "obj_scale": 1,
+            #     "position": (3, 1),
+            # },
         ]
         task_seqs = [task_seq]
     elif cfg.env == "pick_place":
@@ -293,22 +363,115 @@ def save_task_imgs(env, task_seq):
         img.save(f"tasks/task_{i}.png")
     env.render_mode = render_mode
 
+def plot_interaction(objects, actions, placements):
+    """
+    Plots a bar chart of actions performed for each object.
+
+    Parameters:
+        objects (list of str): List of object names.
+        actions (list of tuples): List of actions for each object. Each action is a tuple or string.
+    """
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # Define some colors for actions
+    action_colors = {
+        'ASK_PREF': '#c9b35b',
+        'ASK_SKILL': '#9a4f69',
+        'ROBOT': '#b39c85',
+        'HUMAN': '#69755c',
+    }
+
+    # Define action order
+    action_order = ['ASK_PREF', 'ASK_SKILL', 'ROBOT', 'HUMAN']
+
+    # Create bars for each object and its corresponding actions
+    for idx, (obj, action, placement) in enumerate(zip(objects, actions, placements)):
+        start = idx  # Bar starts at the index
+        width = 1  # Width of the bar spans one unit
+
+        if len(action)==2:
+            # Split the bar if multiple actions are present
+            half_width = width / 2
+            ax.barh(y=action_order.index(action[0]), width=half_width, left=start, color=action_colors[action[0]],
+                    edgecolor='black', align='center')
+            ax.barh(y=action_order.index(action[1]), width=half_width, left=start + half_width,
+                    color=action_colors[action[1]], edgecolor='black', align='center')
+            # Add placement text for each action
+            ax.text(start + 0.25, action_order.index(action[0]), placement[0], ha='center', va='center', fontsize=8,
+                    color='black', weight='bold')
+            ax.text(start + 0.75, action_order.index(action[1]), placement[1], ha='center', va='center', fontsize=8,
+                    color='black', weight='bold')
+
+        else:
+            # Single action bar
+            ax.barh(y=action_order.index(action[0]), width=width, left=start, color=action_colors[action[0]],
+                    edgecolor='black', align='center')
+
+            # Add placement text to the bar
+            ax.text(start + 0.5, action_order.index(action[0]), placement[0], ha='center', va='center', fontsize=8, color='black', weight='bold')
+
+        # Add a dotted vertical line to indicate the start and end of each object
+        ax.axvline(x=start, color='gray', linestyle='dotted', linewidth=0.8)
+
+    # Set the x-axis to show object names
+    ax.set_xticks(range(len(objects)))
+    ax.set_xticklabels(objects, rotation=90)
+
+    # Set the y-axis to show action names
+    ax.set_yticks(range(len(action_order)))
+    ax.set_yticklabels(action_order)
+
+    # Set the y-axis label and x-axis label
+    ax.set_ylabel('Action Name')
+    ax.set_xlabel('Object Name')
+    ax.set_title('Actions Performed on Objects')
+
+    # Add legend
+    # patches = [mpatches.Patch(color=color, label=action) for action, color in action_colors.items()]
+    # ax.legend(handles=patches, title="Actions")
+
+    # Show the plot
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig("interaction.png")
+    plt.close()
+
+def sample_human_pref(list_of_goals):
+    n_human_prefs = 3
+    # create a dictionary of all object, color combinations to random goals
+    objs_list = ["key", "box", "ball"]
+    colors_list = ["red", "green", "blue", "yellow"]
+    all_combinations = [(obj, color) for obj in objs_list for color in colors_list]
+
+    human_pref_1 = {comb: random.choice(list_of_goals) for comb in all_combinations}
+    human_pref_2 = {comb: random.choice(list_of_goals) for comb in all_combinations}
+    human_pref_3 = {comb: random.choice(list_of_goals) for comb in all_combinations}
+
+    list_of_prefs = [human_pref_1, human_pref_2, human_pref_3]
+    return random.choice(list_of_prefs)
 
 @hydra.main(
-    config_path="../cfg", config_name="run_interaction_planner", version_base="1.1"
+    config_path="../cfg", config_name="run_interaction_planner_med", version_base="1.1"
 )
 def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")
-
     env, interaction_env = init_domain(cfg)
     env.reset()
 
-    # __import__("ipdb").set_trace()
-    task_seqs = generate_task_seqs(cfg, n_seqs=1, seed=cfg.seed)
+    # task_seqs = generate_task_seqs(cfg, n_seqs=1, seed=cfg.seed)
+    task_seqs = randomize_gridworld_task_seq(env, cfg, n_objs=10, seed=cfg.seed)
+
+    true_human_pref = sample_human_pref(cfg.gridworld.list_of_goals)
+
     task_seq = task_seqs[0]
 
     for _ in range(100): env.render()
     if cfg.env == "gridworld" and cfg.vis_tasks:
+        vis_tasks(env, task_seq)
+        save_task_imgs(env, task_seq)
+        # pdb.set_trace()
+
+    elif cfg.env == "med_gridworld" and cfg.vis_tasks:
         vis_tasks(env, task_seq)
         save_task_imgs(env, task_seq)
 
@@ -319,14 +482,23 @@ def main(cfg):
                 env.render()
 
     interaction_env.reset(task_seq)
+    interaction_env.set_human_pref(true_human_pref)
 
-    __import__('ipdb').set_trace()
+    # __import__('ipdb').set_trace()
 
     belief_estimator = make_belief_estimator(cfg, env, task_seq)
     planner = make_planner(interaction_env, belief_estimator, cfg)
-    planner.rollout_interaction(
+    total_rew, resultant_objects, resultant_actions, placements = planner.rollout_interaction(
         task_seq, interaction_env.task_similarity, interaction_env.pref_similarity
     )
+    print(f"Total reward: {total_rew}")
+    print(f"Resultant objects: {resultant_objects}")
+
+    # resultant_actions = [[a["action_type"] for a in actions] for actions in resultant_actions]
+    print(f"Resultant actions: {resultant_actions}")
+    print(f"Placements: {placements}")
+    plot_interaction(resultant_objects, resultant_actions, placements)
+
 
     return
 

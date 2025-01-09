@@ -9,11 +9,12 @@ import numpy as np
 from gurobipy import GRB
 
 from .base_planner import InteractionPlanner
+import pdb
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.INFO)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # planner_type = "informed_greedy"
 # planner_type = "greedy"
@@ -71,6 +72,8 @@ class FacilityLocationPlanner(InteractionPlanner):
             task2 given the preference param with which the skill on task1 was
             trained on.
             """
+            # task_similarity_fn(task, test_task)
+            # pref_similarity_fn(mle_train_pref, 'G1')
             # TODO for already learned skills, simulate the prob
             task_sim = task_similarity_fn(task1, task2)
             pref_sim = pref_similarity_fn(pref1, pref2)
@@ -97,9 +100,7 @@ class FacilityLocationPlanner(InteractionPlanner):
         # gurobi wants all tuples to be of the same length
         # setup_costs:(type-of-query, train_task_id, demo_task_id)
         # service_costs:(type-of-query, train_task_id, demo_task_id, pref_task_id)
-        for task_id, task in enumerate(
-            task_seq[current_task_id:], start=current_task_id
-        ):
+        for task_id, task in enumerate(task_seq[current_task_id:], start=current_task_id):
             train_pref_belief = pref_beliefs[task_id]
             mle_train_pref = pref_space[np.argmax(train_pref_belief)]
             # hum
@@ -122,7 +123,8 @@ class FacilityLocationPlanner(InteractionPlanner):
             # assume demo also complete the task perfectly
             service_costs[(facility, task_id)] = 0
             # for test_task_id in range(task_id + 1, N):
-            for test_task_id in range(task_id, N):
+
+            for test_task_id in range(task_id, len(task_seq)):
                 test_task = task_seq[test_task_id]
                 # XXX robot specifically asks for a skill with a pref params
                 # XXX this will be the mle pref of the user ofc
@@ -150,6 +152,7 @@ class FacilityLocationPlanner(InteractionPlanner):
                 logger.debug(f" Belief pref costs: {pref_costs}")
 
                 # save the best pref for use during execution
+                # pdb.set_trace()
                 best_prefs[(facility, test_task_id)] = pref_space[
                     np.argmin(execution_costs + pref_costs)
                 ]
@@ -157,6 +160,10 @@ class FacilityLocationPlanner(InteractionPlanner):
                     execution_costs + pref_costs
                 )
                 # __import__('ipdb').set_trace()
+
+            # print("current_task_id", current_task_id)
+            # if task_id == 9:
+            #     pdb.set_trace()
 
             # TODO execute the best previously learned skill in sim
             facility = ("ROBOT", "skill library")
@@ -226,6 +233,7 @@ class FacilityLocationPlanner(InteractionPlanner):
             demands, facilities, setup_costs, service_costs, current_task_id
         )
         assignments = solver_info["assignments"]
+        print("assignments", assignments)
         # construct a plan based on facility location assingnments
         plan = [None] * len(task_seq)
         for key in assignments:
@@ -240,6 +248,12 @@ class FacilityLocationPlanner(InteractionPlanner):
                     plan[demand]["pref"] = best_prefs[key]
                 else:
                     # reqeust skill with specific pref param
+                    # pdb.set_trace()
+                    # print("key", key)
+                    # print("demand", demand)
+                    # print("len(keys)", best_prefs.keys())
+                    # if key not in best_prefs:
+                    #     __import__("ipdb").set_trace()
                     plan[demand]["pref"] = best_prefs[key]
             elif facility_type == "ROBOT":
                 try:

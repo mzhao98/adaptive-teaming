@@ -4,9 +4,10 @@ from copy import deepcopy
 from pprint import pformat
 
 import numpy as np
+import pdb
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 # logger.setLevel(logging.INFO)
 
 
@@ -36,6 +37,7 @@ class InteractionPlanner(ABC):
         """
         Rollout the interaction between the human and the agent for all the tasks.
         """
+        resultant_objects, resultant_actions, placements = [], [], []
         self.robot_skills = []
         total_rew = 0
         self.interaction_env.reset(task_seq)
@@ -57,6 +59,7 @@ class InteractionPlanner(ABC):
                 pref_similarity_fn,
                 task_id,
             )
+            # pdb.set_trace()
             action = plan[0]
             executed_actions.append(action)
             obs, rew, done, info = self.interaction_env.step(action)
@@ -76,6 +79,7 @@ class InteractionPlanner(ABC):
             elif action["action_type"] == "ASK_PREF":
                 self.belief_estimator.update_beliefs(task_id, info)
                 logger.debug(f"  Updated beliefs: {pformat(self.belief_estimator.beliefs)}")
+                print("beliefs", self.belief_estimator.beliefs)
 
             elif action["action_type"] == "ROBOT":
                 # Execute previously learned skill
@@ -101,7 +105,32 @@ class InteractionPlanner(ABC):
                 logger.debug(f"  Round {i}: Task {executed_task_ids[i]} {executed_task['obj_type']}-{executed_task['obj_color']} \n \
                              \t\t\t\t\t\t\t {action}, belief: {executed_beliefs[i]}, {rew}\n")
 
+            if info["current_task_id"] == task_id:
+                resultant_objects.append((task_id))
+                resultant_actions.append([action['action_type']])
+                placements.append([info["pref"]])
+            else:
+                print("action", action)
+                print("info", info)
+                print("executed_task", executed_task)
+                if len(resultant_objects) > 1 and resultant_objects[-1]==task_id:
+                    resultant_actions[-1].append(action['action_type'])
+                    if action['action_type'] == 'HUMAN':
+                        placements[-1].append(info["pref"])
+                    else:
+                        placements[-1].append(action["pref"])
+                else:
+                    resultant_objects.append((task_id))
+                    resultant_actions.append([action['action_type']])
+                    if action['action_type'] == 'HUMAN':
+                        placements.append([info["pref"]])
+                    else:
+                        placements.append([action["pref"]])
+
             task_id = info["current_task_id"]
+            print("executed_task_ids", executed_task_ids)
+            print("task_id", task_id)
+
 
         logger.info("Interaction statistics:")
         logger.info("-----------------------")
@@ -111,6 +140,9 @@ class InteractionPlanner(ABC):
         logger.info(f"   #human: {sum([1 for a in executed_actions if a['action_type'] == 'HUMAN'])}")
         logger.info(f"   #pref: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_PREF'])}")
         logger.info(f"   #robot: {sum([1 for a in executed_actions if a['action_type'] == 'ROBOT'])}")
+
+        resultant_objects = [task_seq[i]['obj_color']+' '+task_seq[i]['obj_type'] for i in resultant_objects]
+        return total_rew, resultant_objects, resultant_actions, placements
 
 
 class AlwaysHuman(InteractionPlanner):

@@ -27,7 +27,7 @@ OBJECT_TYPES = {
 }
 
 
-class GridWorld(MiniGridEnv):
+class MediumGridWorld(MiniGridEnv):
     """A simple 2D grid world.
     The agent has to pick up an object and place it in one of the goal locations.
 
@@ -49,6 +49,7 @@ class GridWorld(MiniGridEnv):
             self.goals = OrderedDict(
                 G1=lambda x, y: (1, y - 2),
                 G2=lambda x, y: (x - 2, y - 2),
+                G3=lambda x, y: (x - 2, y - 4),
             )
         else:
             self.goals = goal_cfg

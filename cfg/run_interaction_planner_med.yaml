@@ -13,7 +13,7 @@ wandb:
   project: act_delegate_inquire
   group: ${env}-${planner}
 
-env: gridworld
+env: med_gridworld
 planner: fc_pref_planner
 
 render: False
@@ -24,7 +24,7 @@ vis_tasks: True
 
 # Env configs
 gridworld:
-  list_of_goals: ['G1', 'G2']
+  list_of_goals: ['G1', 'G2', 'G3']
 
 human_model:
   demo_file: ${data_dir}/${env}_demo.pkl
