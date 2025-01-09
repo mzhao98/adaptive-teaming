@@ -20,7 +20,7 @@ render: False
 collect_demo: False
 data_dir: data/${env}
 seed: 42
-vis_tasks: False
+vis_tasks: False  # See each object in environment before executing
 
 # Env configs
 gridworld:
@@ -50,4 +50,3 @@ confidence_based_planner:
 
 fixed_planner:
   plan: ["ASK_SKILL", "ROBOT", "HUMAN", "ROBOT", "HUMAN"]
-

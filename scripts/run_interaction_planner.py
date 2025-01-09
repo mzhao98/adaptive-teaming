@@ -101,6 +101,7 @@ def make_planner(interaction_env, belief_estimator, cfg):
 
 
 def init_domain(cfg):
+    """ BEGIN: Fetch demonstration data. """
     if cfg.collect_demo:
         env = make_env(cfg.env, cfg)
         env.reset()
@@ -142,7 +143,9 @@ def init_domain(cfg):
             exit(f"See if {cfg.data_dir} exists.")
         # else:
         # logger.warning("Not loading demos from file.")
+    """ END: Fetch demonstration data. """
 
+    """ BEGIN: Instantiate environment. """
     env = make_env(cfg.env, cfg)
     env.reset()
     # __import__('ipdb').set_trace()
@@ -158,6 +161,7 @@ def init_domain(cfg):
             env, cfg.human_model, cfg.cost_cfg)
     else:
         raise ValueError(f"Unknown environment: {cfg.env}")
+    """ END: Instantiate environment. """
 
     interaction_env.load_human_demos(demos)
 
@@ -275,7 +279,7 @@ def vis_tasks(env, task_seq):
         env.reset()
         for _ in range(10):
             env.render()
-        __import__("ipdb").set_trace()
+        # __import__("ipdb").set_trace()
     else:
         for task in task_seq:
             env.reset_to_state(task)
@@ -320,12 +324,14 @@ def main(cfg):
 
     interaction_env.reset(task_seq)
 
-    __import__('ipdb').set_trace()
+    # __import__('ipdb').set_trace()
 
     belief_estimator = make_belief_estimator(cfg, env, task_seq)
     planner = make_planner(interaction_env, belief_estimator, cfg)
     planner.rollout_interaction(
-        task_seq, interaction_env.task_similarity, interaction_env.pref_similarity
+        task_seq,
+        task_similarity_fn=interaction_env.task_similarity,
+        pref_similarity_fn=interaction_env.pref_similarity,
     )
 
     return
