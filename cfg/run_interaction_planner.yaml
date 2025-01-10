@@ -1,5 +1,5 @@
 defaults:
-  - cost_cfg/normative  # high_cost_human, low_cost_human, normative
+  - cost_cfg/normative_human  # high_cost_human, low_cost_human, normative_human
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
