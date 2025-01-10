@@ -15,7 +15,7 @@ wandb:
   group: ${env}-${planner}
 
 env: med_gridworld
-planner: fc_pref_planner
+planner: confidence_based_planner
 
 render: False
 collect_demo: False

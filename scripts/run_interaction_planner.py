@@ -189,8 +189,6 @@ def set_seeds(seed=42):
 
 
 def randomize_gridworld_task_seq(env, cfg, n_objs=10, seed=42, gridsize=8):
-
-
     acceptable_locations = env.get_acceptable_obj_locations()
     if env.agent_start_pos in acceptable_locations:
         acceptable_locations.remove(env.agent_start_pos)
