@@ -46,16 +46,21 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
         pref = obs["pref"]
         pref_idx = self._pref_to_idx(pref)
         self.beliefs[task_id][pref_idx] = 1
-        print("self.beliefs[task_id]:", self.beliefs[task_id])
+        # print("self.beliefs[task_id]:", self.beliefs[task_id])
         for other_pref_idx in range(len(self.beliefs[task_id])):
             if other_pref_idx != pref_idx:
-                self.beliefs[task_id][other_pref_idx] = 0.1
+                self.beliefs[task_id][other_pref_idx] = 0
 
         for task, belief in zip(self.task_seq[task_id+1:],
                                 self.beliefs[task_id+1:]):
             task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
             if task_sim:
                 belief[pref_idx] = 1
+
+                for other_pref_idx in range(len(belief)):
+                    if other_pref_idx != pref_idx:
+                        belief[other_pref_idx] = 0
+
             # bayesian update of the belief
             # XXX fix this
             # belief[pref_idx] += task_sim

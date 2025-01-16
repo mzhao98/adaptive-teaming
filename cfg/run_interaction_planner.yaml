@@ -1,5 +1,5 @@
 defaults:
-  - cost_cfg/normative_human  # high_cost_human, low_cost_human, normative_human
+  - cost_cfg/high_cost_human  # high_cost_human, low_cost_human, normative_human
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
@@ -15,7 +15,7 @@ wandb:
   group: ${env}-${planner}
 
 env: gridworld
-planner: fc_pref_planner
+planner: info_gain_planner
 
 render: False
 collect_demo: False
@@ -34,6 +34,9 @@ task_seq:
   num_tasks: 10
 
 # Planners
+
+info_gain_planner:
+  cost_scale_factor: 0.1
 
 fc_pref_planner:
 

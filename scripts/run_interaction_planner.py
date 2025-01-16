@@ -70,6 +70,13 @@ def make_planner(interaction_env, belief_estimator, cfg):
         planner = FacilityLocationPlanner(
             interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
         )
+    elif cfg.planner == "info_gain_planner":
+        from adaptive_teaming.planner import InfoGainPlanner
+
+        planner_cfg = cfg[cfg.planner]
+        planner = InfoGainPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
     elif cfg.planner == "fc_pref_planner":
         from adaptive_teaming.planner import FacilityLocationPrefPlanner
 
@@ -449,7 +456,7 @@ def sample_human_pref(list_of_goals):
     return random.choice(list_of_prefs)
 
 @hydra.main(
-    config_path="../cfg", config_name="run_interaction_planner_med", version_base="1.1"
+    config_path="../cfg", config_name="run_interaction_planner", version_base="1.1"
 )
 def main(cfg):
     logger.info(f"Output directory: {os.getcwd()}")

@@ -172,7 +172,9 @@ class FacilityLocationPlanner(InteractionPlanner):
             best_execution_cost = np.inf
             best_skill, best_pref = None, None
             logger.debug("  Computing best skill for ROBOT facility")
+            # print("self, robot skills", self.robot_skills)
             for skill in self.robot_skills:
+
                 for test_pref_id, test_pref in enumerate(pref_space):
                     train_task, train_pref = skill["task"], skill["pref"]
                     execution_cost = (
