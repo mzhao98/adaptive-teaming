@@ -5,6 +5,8 @@ import random
 import pdb
 import hydra
 import numpy as np
+
+from adaptive_teaming.planner import TaskRelevantInfoGainPlanner
 from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
 from adaptive_teaming.utils.utils import pkl_dump, pkl_load
 from hydra.utils import to_absolute_path
@@ -75,6 +77,13 @@ def make_planner(interaction_env, belief_estimator, cfg):
 
         planner_cfg = cfg[cfg.planner]
         planner = InfoGainPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
+    elif cfg.planner == "task_info_gain_planner":
+        from adaptive_teaming.planner import TaskRelevantInfoGainPlanner
+
+        planner_cfg = cfg[cfg.planner]
+        planner = TaskRelevantInfoGainPlanner(
             interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
         )
     elif cfg.planner == "fc_pref_planner":

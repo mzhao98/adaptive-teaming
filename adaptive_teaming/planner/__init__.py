@@ -5,4 +5,4 @@ from .facility_location_planner import (FacilityLocationPlanner,
                                         FacilityLocationPrefPlanner,
                                         ConfidenceBasedFacilityLocationPlanner)
 from .pref_belief_estimator import GridWorldBeliefEstimator
-from .info_gain_planner import InfoGainPlanner
+from .info_gain_planner import InfoGainPlanner, TaskRelevantInfoGainPlanner

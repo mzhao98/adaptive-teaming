@@ -179,6 +179,167 @@ class InfoGainPlanner(InteractionPlanner):
 
         return plan, plan_info
 
+class TaskRelevantInfoGainPlanner(InteractionPlanner):
+
+    def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
+        super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
+
+    def plan(
+        self,
+        task_seq,
+        pref_beliefs,
+        task_similarity_fn,
+        pref_similarity_fn,
+        current_task_id,
+    ):
+        """
+        task_seq: sequence of tasks each described a vector
+        task_similarity_fn: function to compute similarity between tasks
+        pref_similarity_fn: function to compute similarity between task preferences
+
+        Output should be a tuple: plan, plan_info
+        plan [{'action_type': 'ASK_PREF'}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}, {'action_type': 'HUMAN', 'service_cost': 0}]
+        plan_info {'cost': 500.0, 'assignments': {(('HUMAN', 'task-0'), 0): 1.0, (('HUMAN', 'task-1'), 1): 1.0, (('HUMAN', 'task-2'), 2): 1.0, (('HUMAN', 'task-3'), 3): 1.0, (('HUMAN', 'task-4'), 4): 1.0, (('HUMAN', 'task-5'), 5): 1.0, (('HUMAN', 'task-6'), 6): 1.0, (('HUMAN', 'task-7'), 7): 1.0, (('HUMAN', 'task-8'), 8): 1.0, (('HUMAN', 'task-9'), 9): 1.0}}
+
+        """
+        N = len(task_seq[current_task_id:])
+        # some large constant
+        M = sum(val for val in self.cost_cfg.values())
+        pref_space = self.interaction_env.pref_space
+        cost_scale = self.planner_cfg.cost_scale_factor
+
+        # Check if there's anything to be gained from queries (prefs or skills)
+        options_to_gain = {}
+        pref_option = 'ASK_PREF'
+        current_obj_type = (task_seq[current_task_id]["obj_type"], task_seq[current_task_id]["obj_color"])
+        # check the gain of preferences
+        candidate_info_gains = []
+        for pref_idx in range(len(pref_space)):
+            total_info_gain_pref_i = 0
+            for task_id in range(len(task_seq)):
+                next_obj_type = (task_seq[task_id]["obj_type"], task_seq[task_id]["obj_color"])
+                if pref_similarity_fn(current_obj_type, next_obj_type) < 1:
+                    continue
+                print("pref is the same")
+                train_pref_belief = pref_beliefs[task_id]
+                for g_idx in range(len(train_pref_belief)):
+                    distr_gi = [train_pref_belief[g_idx], 1 - train_pref_belief[g_idx]]
+                    print("distr_gi", distr_gi)
+                    init_entropy_gi = entropy(distr_gi)
+                    # compute the new belief
+                    new_belief_distr_gi = deepcopy(distr_gi)
+                    new_belief_distr_gi[pref_idx] = 1
+
+                    for other_pref_idx in range(len(new_belief_distr_gi)):
+                        if other_pref_idx != pref_idx:
+                            new_belief_distr_gi[other_pref_idx] = 0
+
+                    # normalize new belief
+                    # new_belief_distr_gi = new_belief_distr_gi / np.sum(new_belief_distr_gi)
+                    print("new_belief_distr_gi", new_belief_distr_gi)
+                    new_entropy_gi = entropy(new_belief_distr_gi)
+                    gain = init_entropy_gi - new_entropy_gi
+                    total_info_gain_pref_i += gain
+            candidate_info_gains.append(total_info_gain_pref_i)
+        best_case_info_gain = max(candidate_info_gains)
+        print("candidate_info_gains", candidate_info_gains)
+        print('best_case_info_gain', best_case_info_gain)
+        options_to_gain[pref_option] = best_case_info_gain
+
+        # check the gain of skills
+        skill_option = 'ASK_SKILL'
+        init_capability = 0
+        # print("self.robot_skills", self.robot_skills)
+        list_of_skills_type_pref = [(self.robot_skills[idx]['task'], self.robot_skills[idx]['pref']) for idx in range(len(self.robot_skills))]
+        for task_id in range(len(task_seq)):
+            # for each preference location
+            for pref_idx in range(len(pref_space)):
+                pref = pref_space[pref_idx]
+                if (task_seq[task_id], pref) in list_of_skills_type_pref:
+                    init_capability += 1 * (pref_beliefs[task_id][pref_idx])
+
+        list_case_capacity = []
+        # cand_pref = pref_space[np.argmax(pref_beliefs[task_id][pref_idx])]
+        for cand_pref in pref_space:
+            capability_after_skill = 0
+            new_list_of_skills_type_pref = deepcopy(list_of_skills_type_pref)
+            new_list_of_skills_type_pref.append((task_seq[current_task_id], cand_pref))
+            for task_id in range(len(task_seq)):
+                # for each preference location
+                for pref_idx in range(len(pref_space)):
+                    pref = pref_space[pref_idx]
+                    if (task_seq[task_id], pref) in new_list_of_skills_type_pref:
+                        capability_after_skill += 1 * (pref_beliefs[task_id][pref_idx])
+            list_case_capacity.append(capability_after_skill)
+
+        print("list_case_capacity", list_case_capacity)
+        best_skill_pref_to_ask_for = pref_space[np.argmax(list_case_capacity)]
+        # best_skill_pref_to_ask_for = cand_pref
+        best_case_capacity = max(list_case_capacity)
+        best_case_skill_gain = best_case_capacity - init_capability
+        print("skill_gain", best_case_skill_gain)
+        options_to_gain[skill_option] = best_case_skill_gain
+        print("pre options_to_gain", options_to_gain)
+        # pdb.set_trace()
+
+        # if any keys in options_to_gain are keys, drop key
+        if options_to_gain['ASK_PREF'] == 0:
+            options_to_gain.pop('ASK_PREF')
+        if options_to_gain['ASK_SKILL'] == 0:
+            options_to_gain.pop('ASK_SKILL')
+
+        # if the keys in options_to_gain are not all zeros, then return the learning plan
+        if all(value == 0 for value in options_to_gain.values()):
+            options_to_gain = {}
+            # check the gain of robot actions
+            robot_option = 'ROBOT'
+            pref_choice = np.argmax(pref_beliefs[current_task_id])
+            prob_correct_on_pref = pref_beliefs[current_task_id][pref_choice]
+            prob_success_on_choice = 0
+            if (task_seq[current_task_id], pref_space[pref_choice]) in list_of_skills_type_pref:
+                prob_success_on_choice = 1
+            failure_cost = self.cost_cfg["FAIL"]*(1-prob_success_on_choice) + self.cost_cfg["PREF_COST"]*(1-prob_correct_on_pref)
+            task_reward = 1-failure_cost
+            print("task_reward", task_reward)
+            options_to_gain[robot_option] = task_reward * cost_scale - self.cost_cfg["ROBOT"] * cost_scale
+
+            # check the gain of human actions
+            human_option = 'HUMAN'
+            options_to_gain[human_option] = - self.cost_cfg["HUMAN"] * cost_scale
+
+        else:
+            # subtract the cost of asking for the preference
+            if pref_option in options_to_gain:
+                options_to_gain[pref_option] = options_to_gain[pref_option] - self.cost_cfg["ASK_PREF"] * cost_scale
+            if skill_option in options_to_gain:
+                options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale
+
+        print("options_to_gain", options_to_gain)
+        # choose the key in options_to_gain with highest value
+        best_action = max(options_to_gain, key=options_to_gain.get)
+        print("best_action", best_action)
+        print("current_task_id", current_task_id)
+        # pdb.set_trace()
+
+        # update the plan
+        plan = [{'action_type': best_action}]
+        if best_action == 'ASK_SKILL':
+            plan[0]['pref'] = best_skill_pref_to_ask_for
+
+        if best_action == 'ROBOT':
+            plan[0]['pref'] = pref_space[pref_choice]
+            plan[0]['task'] = task_seq[current_task_id]
+            # find skill id for the task
+            for idx in range(len(self.robot_skills)):
+                if self.robot_skills[idx]['task'] == task_seq[current_task_id] and self.robot_skills[idx]['pref'] == pref_space[pref_choice]:
+                    plan[0]['skill_id'] = idx
+                    break
+
+        plan_info = {}
+
+
+        return plan, plan_info
+
 
 
 def vis_world(world_state, fig=None):
