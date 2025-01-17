@@ -15,7 +15,7 @@ wandb:
   group: ${env}-${planner}
 
 env: gridworld
-planner: fc_pref_planner
+planner: info_gain_planner
 
 render: False
 collect_demo: False
@@ -36,7 +36,7 @@ task_seq:
 # Planners
 
 info_gain_planner:
-  cost_scale_factor: 0.1
+  cost_scale_factor: 1
 
 task_info_gain_planner:
   cost_scale_factor: 1

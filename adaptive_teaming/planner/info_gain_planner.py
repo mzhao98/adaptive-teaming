@@ -128,30 +128,28 @@ class InfoGainPlanner(InteractionPlanner):
             options_to_gain.pop('ASK_SKILL')
 
         # if the keys in options_to_gain are not all zeros, then return the learning plan
-        if all(value == 0 for value in options_to_gain.values()):
-            options_to_gain = {}
-            # check the gain of robot actions
-            robot_option = 'ROBOT'
-            pref_choice = np.argmax(pref_beliefs[current_task_id])
-            prob_correct_on_pref = pref_beliefs[current_task_id][pref_choice]
-            prob_success_on_choice = 0
-            if (task_seq[current_task_id], pref_space[pref_choice]) in list_of_skills_type_pref:
-                prob_success_on_choice = 1
-            failure_cost = self.cost_cfg["FAIL"]*(1-prob_success_on_choice) + self.cost_cfg["PREF_COST"]*(1-prob_correct_on_pref)
-            task_reward = 1-failure_cost
-            print("task_reward", task_reward)
-            options_to_gain[robot_option] = task_reward * cost_scale - self.cost_cfg["ROBOT"] * cost_scale
 
-            # check the gain of human actions
-            human_option = 'HUMAN'
-            options_to_gain[human_option] = - self.cost_cfg["HUMAN"] * cost_scale
+        # check the gain of robot actions
+        robot_option = 'ROBOT'
+        pref_choice = np.argmax(pref_beliefs[current_task_id])
+        prob_correct_on_pref = pref_beliefs[current_task_id][pref_choice]
+        prob_success_on_choice = 0
+        if (task_seq[current_task_id], pref_space[pref_choice]) in list_of_skills_type_pref:
+            prob_success_on_choice = 1
+        failure_cost = self.cost_cfg["FAIL"]*(1-prob_success_on_choice) + self.cost_cfg["PREF_COST"]*(1-prob_correct_on_pref)
+        task_reward = 1-failure_cost
+        print("task_reward", task_reward)
+        options_to_gain[robot_option] = task_reward * cost_scale - self.cost_cfg["ROBOT"] * cost_scale
 
-        else:
-            # subtract the cost of asking for the preference
-            if pref_option in options_to_gain:
-                options_to_gain[pref_option] = options_to_gain[pref_option] - self.cost_cfg["ASK_PREF"] * cost_scale
-            if skill_option in options_to_gain:
-                options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale
+        # check the gain of human actions
+        human_option = 'HUMAN'
+        options_to_gain[human_option] = - self.cost_cfg["HUMAN"] * cost_scale
+
+        # subtract the cost of asking for the preference
+        if pref_option in options_to_gain:
+            options_to_gain[pref_option] = options_to_gain[pref_option] - self.cost_cfg["ASK_PREF"] * cost_scale
+        if skill_option in options_to_gain:
+            options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale
 
         print("options_to_gain", options_to_gain)
         # choose the key in options_to_gain with highest value
