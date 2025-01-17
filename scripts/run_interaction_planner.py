@@ -214,7 +214,7 @@ def randomize_gridworld_task_seq(env, cfg, n_objs=10, seed=42, gridsize=8):
     np.random.seed(seed)
 
     # randomly assign objects to locations
-    objs_list = ["Key", "Box", "Ball"]
+    objs_list = ["Box", 'Ball']
     colors_list = ["red", "green", "blue", "yellow"]
 
     # create a list of n_objs objects
@@ -377,7 +377,7 @@ def save_task_imgs(env, task_seq):
         img.save(f"tasks/task_{i}.png")
     env.render_mode = render_mode
 
-def plot_interaction(objects, actions, placements):
+def plot_interaction(objects, actions, placements, plannername):
     """
     Plots a bar chart of actions performed for each object.
 
@@ -438,7 +438,7 @@ def plot_interaction(objects, actions, placements):
     # Set the y-axis label and x-axis label
     ax.set_ylabel('Action Name')
     ax.set_xlabel('Object Name')
-    ax.set_title('Actions Performed on Objects')
+    ax.set_title(f'Actions Performed on Objects: {plannername}')
 
     # Add legend
     # patches = [mpatches.Patch(color=color, label=action) for action, color in action_colors.items()]
@@ -511,7 +511,8 @@ def main(cfg):
     # resultant_actions = [[a["action_type"] for a in actions] for actions in resultant_actions]
     print(f"Resultant actions: {resultant_actions}")
     print(f"Placements: {placements}")
-    plot_interaction(resultant_objects, resultant_actions, placements)
+    plot_interaction(resultant_objects, resultant_actions, placements, cfg.planner)
+    print("total_rew", total_rew)
 
 
     return

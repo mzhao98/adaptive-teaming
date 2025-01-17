@@ -39,7 +39,7 @@ info_gain_planner:
   cost_scale_factor: 0.1
 
 task_info_gain_planner:
-  cost_scale_factor: 0.5
+  cost_scale_factor: 1
 
 fc_pref_planner:
 

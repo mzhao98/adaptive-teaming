@@ -66,7 +66,9 @@ class InteractionPlanner(ABC):
             action = plan[0]
             executed_actions.append(action)
             obs, rew, done, info = self.interaction_env.step(action)
-
+            print("action", action)
+            print("rew", rew)
+            print()
             executed_beliefs.append(deepcopy(self.belief_estimator.beliefs[task_id]))
             if action["action_type"] == "ASK_SKILL":
                 self.robot_skills.append(
