@@ -45,7 +45,7 @@ class InteractionEnv:
             # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
-            obs, rew, done, info = self.human_step(task)
+            obs, rew, done, info = self.human_step(None, task)
             self.current_task_id += 1
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
@@ -92,12 +92,12 @@ class InteractionEnv:
 
     # human model
     # -------------
-    def human_step(self, human_pref, task=None):
+    def human_step(self, human_pref, task):
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
         for _ in range(10):
             self.env.render()
-        return None, rew, True, {'pref':human_pref}
+        return None, rew, True, {'pref': human_pref}
 
     def query_skill(self, task, pref):
         """

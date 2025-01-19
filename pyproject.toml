@@ -23,3 +23,7 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["adaptive_teaming"]
+
+[tool.pyright]
+# needed because pyright can't find packages installed as editables
+extraPaths = ['deps/robosuite']
