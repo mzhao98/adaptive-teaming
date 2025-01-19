@@ -1,7 +1,9 @@
 import logging
+import pdb
+import time
 from copy import copy, deepcopy
 from itertools import product
-from pprint import pprint, pformat
+from pprint import pformat, pprint
 
 import gurobipy as gp
 import matplotlib.pyplot as plt
@@ -9,12 +11,11 @@ import numpy as np
 from gurobipy import GRB
 
 from .base_planner import InteractionPlanner
-import pdb
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.INFO)
 logger.setLevel(logging.INFO)
+# logger.setLevel(logging.DEBUG)
 
 # planner_type = "informed_greedy"
 # planner_type = "greedy"
@@ -26,6 +27,7 @@ class FacilityLocationPlanner(InteractionPlanner):
     def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
         super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
 
+    # @profile
     def plan(
         self,
         task_seq,
@@ -39,32 +41,14 @@ class FacilityLocationPlanner(InteractionPlanner):
         task_similarity_fn: function to compute similarity between tasks
         pref_similarity_fn: function to compute similarity between task preferences
         """
+        start_time = time.time()
         N = len(task_seq[current_task_id:])
-        # some large constant
-        M = sum(val for val in self.cost_cfg.values())
         pref_space = self.interaction_env.pref_space
-
-        # # three types of facilities
-        # # delegate to human
-        # C_hum = np.zeros((N, 1)) + self.cost_cfg['hum']
-        # # demo query
-        # C_demo = np.zeros((N, N)) + self.cost_cfg['demo']
-        # # pref query
-        # # n train_task_id, pref_id, test_task_id
-        # C_pref = np.zeros((N, N, N)) + self.cost_cfg['pref']
-
-        # # perfect transfer on self
-        # Pi_transfer = np.eye(N)
-        # task_similarity = np.zeros((N, N))
-        # for i, a in enumerate(task_seq):
-        # for j, b in enumerate(task_seq):
-        # task_similarity[i, j] = task_similarity_fn(a, b)
-
-        # print("Pi_transfer")
-        # pprint(Pi_transfer.round(2))
-
-        # # assume perfect transfer on self
-        # Pref_transfer = np.eye(N)
+        c_rob = self.cost_cfg["ROBOT"]
+        c_hum = self.cost_cfg["HUMAN"]
+        c_skill = self.cost_cfg["ASK_SKILL"]
+        c_fail = self.cost_cfg["FAIL"]
+        c_pref = self.cost_cfg["ASK_PREF"]
 
         def Pi_transfer(task1, task2, pref1, pref2):
             """
@@ -79,16 +63,6 @@ class FacilityLocationPlanner(InteractionPlanner):
             pref_sim = pref_similarity_fn(pref1, pref2)
             return task_sim * pref_sim
 
-        # # both demo will have P(unsafe) * c_fail penalty + P(wrong pref) * c_pref_penalty
-        # for i in range(N):
-        # # can't help on previous tasks
-        # C_demo[i, :i] += M
-        # for j in range(i, N):
-        # C_demo[i, j] += ((1 - Pi_transfer[i, j]) * self.cost_cfg['fail_cost'] +
-        # (1 - Pref_transfer[i, j]) * self.cost_cfg['pref_cost'])
-        # if i != j:
-        # C_demo[i, j] += self.cost_cfg['rob']
-
         demands = task_seq[current_task_id:]
 
         facilities = []
@@ -100,13 +74,15 @@ class FacilityLocationPlanner(InteractionPlanner):
         # gurobi wants all tuples to be of the same length
         # setup_costs:(type-of-query, train_task_id, demo_task_id)
         # service_costs:(type-of-query, train_task_id, demo_task_id, pref_task_id)
-        for task_id, task in enumerate(task_seq[current_task_id:], start=current_task_id):
+        for task_id, task in enumerate(
+            task_seq[current_task_id:], start=current_task_id
+        ):
             train_pref_belief = pref_beliefs[task_id]
             mle_train_pref = pref_space[np.argmax(train_pref_belief)]
             # hum
             facility = ("HUMAN", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = self.cost_cfg["HUMAN"]
+            setup_costs[facility] = c_hum
 
             # always succeeds
             # Note: I could either set a high cost for all the other tasks or I
@@ -117,7 +93,7 @@ class FacilityLocationPlanner(InteractionPlanner):
             # demo
             facility = ("ASK_SKILL", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = self.cost_cfg["ASK_SKILL"]
+            setup_costs[facility] = c_skill
 
             # demo affects only current and future tasks.
             # assume demo also complete the task perfectly
@@ -129,7 +105,7 @@ class FacilityLocationPlanner(InteractionPlanner):
                 # XXX robot specifically asks for a skill with a pref params
                 # XXX this will be the mle pref of the user ofc
                 service_costs[(facility, test_task_id)
-                              ] = self.cost_cfg["ROBOT"]
+                              ] = c_rob
                 pref_belief = pref_beliefs[test_task_id]
                 # mle_test_pref = pref_space[np.argmax(pref_belief)]
                 # argmin over pref params
@@ -138,18 +114,12 @@ class FacilityLocationPlanner(InteractionPlanner):
                     for pref in pref_space
                 ]
                 execution_costs = (1 - np.array(pi_transfers)
-                                   ) * self.cost_cfg["FAIL"]
-                # pref_costs = (
-                    # np.array(
-                        # [
-                            # 1 - pref_similarity_fn(mle_train_pref, pref)
-                            # for pref in pref_space
-                        # ]
-                    # )
-                    # * self.cost_cfg["PREF_COST"]
-                # )
-                pref_costs = (1 - np.array(pref_belief)) * self.cost_cfg["PREF_COST"]
-                logger.debug(f" Belief pref costs: {pref_costs}")
+                                   ) * c_fail 
+                pref_costs = (1 - np.array(pref_belief)) * \
+                    c_pref
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f" Belief pref costs: {pref_costs}")
 
                 # save the best pref for use during execution
                 # pdb.set_trace()
@@ -159,11 +129,6 @@ class FacilityLocationPlanner(InteractionPlanner):
                 service_costs[(facility, test_task_id)] += min(
                     execution_costs + pref_costs
                 )
-                # __import__('ipdb').set_trace()
-
-            # print("current_task_id", current_task_id)
-            # if task_id == 9:
-            #     pdb.set_trace()
 
             # TODO execute the best previously learned skill in sim
             facility = ("ROBOT", "skill library")
@@ -180,13 +145,11 @@ class FacilityLocationPlanner(InteractionPlanner):
                     execution_cost = (
                         1 - Pi_transfer(train_task, test_task,
                                         train_pref, test_pref)
-                    ) * self.cost_cfg["FAIL"]
-                    logger.debug(f"  train_pref, test_pref: {train_pref}, {test_pref}")
-                    # pref_cost = (
-                        # 1 - pref_similarity_fn(train_pref, test_pref)
-                    # ) * self.cost_cfg["PREF_COST"]
+                    ) * c_fail
+                    # logger.debug(
+                    # f"  train_pref, test_pref: {train_pref}, {test_pref}")
                     pref_belief = pref_beliefs[task_id]
-                    pref_cost = (1 - pref_belief[test_pref_id]) * self.cost_cfg["PREF_COST"]
+                    pref_cost = (1 - pref_belief[test_pref_id]) * c_pref
                     if execution_cost + pref_cost < best_execution_cost:
                         best_execution_cost = execution_cost + pref_cost
                         best_skill, best_pref = skill, test_pref
@@ -202,47 +165,28 @@ class FacilityLocationPlanner(InteractionPlanner):
                     setup_costs[facility] = 0  # already learned
                 logger.debug(f"  Adding ROBOT facility  for task {task_id}")
                 service_costs[(facility, task_id)] = (
-                    self.cost_cfg["ROBOT"] + best_execution_cost
+                    c_rob + best_execution_cost
                 )
 
-            """
-            Alg 2: Pref facilities
-            ----------------------
-
-            # pref
-            # each task i creates i-1 pref facilities
-            # pref on task_id with all previous demos
-            for demo_task_id in range(task_id):
-                facility = ("pref", f"task-{task_id}, demo-{demo_task_id}")
-                # facility = ('pref', str(task_id) + '-' + str(demo_task_id))
-                facilities.append(facility)
-                setup_costs[facility] = self.cost_cfg["pref"]
-
-                # now compute service costs
-                # XXX shouldn't the preferene also generalize to other tasks??
-                # XXX this will require another for loop
-                service_costs[(facility, task_id)] = (
-                    self.cost_cfg["rob"]
-                    + (1 - Pi_transfer[demo_task_id, task_id])
-                    * self.cost_cfg["fail_cost"]
-                    + (1 - Pref_transfer[task_id, task_id]
-                       ) * self.cost_cfg["pref_cost"]
-                )
-            """
+        precomputation_time = time.time() - start_time
 
         # N tasks = demands
+        start_time = time.time()
         solver_info = self._solve_facility_location(
             demands, facilities, setup_costs, service_costs, current_task_id
         )
+        fl_solve_time = time.time() - start_time
         assignments = solver_info["assignments"]
-        print("assignments", assignments)
+        # print("assignments", assignments)
         # construct a plan based on facility location assingnments
         plan = [None] * len(task_seq)
         for key in assignments:
             facility, demand = key[0], int(key[1])
             facility_type, train_task = facility
-            plan[demand] = {"action_type": facility_type,
-                            "service_cost": service_costs[key]}
+            plan[demand] = {
+                "action_type": facility_type,
+                "service_cost": service_costs[key],
+            }
             if facility_type == "ASK_SKILL":
                 train_task = int(train_task.split("-")[-1])
                 if demand != train_task:
@@ -264,29 +208,15 @@ class FacilityLocationPlanner(InteractionPlanner):
                 except KeyError:
                     __import__("ipdb").set_trace()
         plan = plan[current_task_id:]
-        logger.debug(f"  Plan: {pformat(plan)}")
-        # __import__('ipdb').set_trace()
-        logger.debug(f"  Plan cost: {solver_info['cost']}")
-        # __import__("ipdb").set_trace()
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"  Plan: {pformat(plan)}")
+            logger.debug(f"  Plan cost: {solver_info['cost']}")
         plan_info = solver_info
+        plan_info["solve_time"] = fl_solve_time
+        plan_info["precomputation_time"] = precomputation_time
 
         return plan, plan_info
 
-        # # pref options
-        # # train task id
-        # for i in range(N):
-        # # skill id
-        # for j in range(N):
-        # # test task id
-        # for k in range(N):
-        # # C_pref[i, j] += (self.cost_cfg['fail'] * +
-        # # self.cost_cfg['pref_penalty'] * task_seq[i]['P(wrong pref)'])
-
-        # compute similarity matrix between task preferences
-
-        # compute cost matrix
-
-    # def _solve_facility_location(self, demands, facilities, setup_costs, service_costs):
     def _solve_facility_location(
         self, demands, facilities, setup_costs, service_costs, demand_start_index
     ):
@@ -352,15 +282,95 @@ class FacilityLocationPlanner(InteractionPlanner):
             return None
 
 
-class FacilityLocationPrefPlanner(FacilityLocationPlanner):
+class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
+    """
+    Implements a greedy version of the facility location planner.
+    """
+
+    def _solve_facility_location(
+        self, demands, facilities, setup_costs, service_costs, demand_start_index
+    ):
+        # future demands
+        S = set(range(demand_start_index, demand_start_index +
+                      len(demands)))
+        X = []
+        while not len(S) == 0:
+            # choose best facility and subset of S
+            best_ratio = np.inf
+            best_fac, best_assignment = None, None
+            for fac in facilities:
+                logger.debug(f"  Facility: {fac}")
+                fac_setup_cost = setup_costs[fac]
+                # find subset of client with best ratio
+                # get service costs
+                fac_service_keys = [
+                    (fac, demand) for demand in S if (fac, demand) in service_costs
+                ]
+                fac_service_costs = [service_costs[key]
+                                     for key in fac_service_keys]
+                # sort the clients in terms of service cost from i
+                sorted_indices = np.argsort(fac_service_costs)
+
+                # find optimal prefix
+                service_cost_sum = 0
+
+                for i, index in enumerate(sorted_indices):
+                    service_cost_sum += fac_service_costs[index]
+                    ratio = (fac_setup_cost + service_cost_sum) / (i + 1)
+                    logger.debug(f"    Ratio: {ratio}")
+                    if ratio < best_ratio:
+                        logger.debug(
+                            f"      Better ratio found! {best_ratio} -> {ratio}"
+                        )
+                        best_ratio = ratio
+                        best_fac = fac
+                        best_assignment = [
+                            fac_service_keys[j] for j in sorted_indices[: i + 1]
+                        ]
+
+            logger.debug(f"Best facility: {best_fac}")
+            assigned_demands = [demand for (_, demand) in best_assignment]
+            # open facility
+            X.append(best_fac)
+            # remove assigned demands from S
+            S.difference_update(assigned_demands)
+            logger.debug(f"  Remaining demands: {S}")
+
+        # compute best assignment for the selected facilities
+        assignments = {}
+        total_cost = 0
+        # setup costs
+        for fac in X:
+            total_cost += setup_costs[fac]
+
+        # compute assignment and service costs
+        for demand in range(demand_start_index, demand_start_index + len(demands)):
+            demand_service_costs = [
+                service_costs.get((fac, demand), np.inf) for fac in X
+            ]
+            # pick best facility
+            best_fac = X[np.argmin(demand_service_costs)]
+
+            assignments[(best_fac, demand)] = 1
+            total_cost += service_costs[(best_fac, demand)]
+
+        solver_info = {"cost": total_cost}
+        solver_info["assignments"] = assignments
+        return solver_info
+
+
+class FacilityLocationPrefPlanner(InteractionPlanner):
     """
     Uses the facility location planner to decide among learn, human and robot.
     Decides whether or not to ask for preference by computing expected
     improvement in objective due to belief update.
     """
 
-    def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
+    def __init__(
+        self, fc_planner, interaction_env, belief_estimator, planner_cfg, cost_cfg
+    ):
         super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
+        self.fc_planner = fc_planner
 
     def plan(
         self,
@@ -370,14 +380,16 @@ class FacilityLocationPrefPlanner(FacilityLocationPlanner):
         pref_similarity_fn,
         current_task_id,
     ):
-        plan1, plan_info1 = super().plan(
+        start_time = time.time()
+        self.fc_planner.robot_skills = self.robot_skills
+        plan1, plan_info1 = self.fc_planner.plan(
             task_seq,
             pref_beliefs,
             task_similarity_fn,
             pref_similarity_fn,
             current_task_id,
         )
-        # return plan1, plan_info1
+        logger.debug(f"Time taken for plan1: {time.time() - start_time}")
         # compute plan with updated belief
         pref_belief = pref_beliefs[current_task_id]
         logger.debug(f"  Pref belief: {pref_beliefs[current_task_id:]}")
@@ -391,9 +403,11 @@ class FacilityLocationPrefPlanner(FacilityLocationPlanner):
                 current_task_id, {"pref": possible_pref_response}
             )
             new_pref_beliefs = belief_estimator.beliefs
-            logger.debug(f"  New pref beliefs: {new_pref_beliefs[current_task_id:]}")
+            logger.debug(
+                f"  New pref beliefs: {new_pref_beliefs[current_task_id:]}")
             # __import__('ipdb').set_trace()
-            plan2, plan_info2 = super().plan(
+            self.fc_planner.robot_skills = self.robot_skills
+            plan2, plan_info2 = self.fc_planner.plan(
                 task_seq,
                 new_pref_beliefs,
                 task_similarity_fn,
@@ -401,15 +415,15 @@ class FacilityLocationPrefPlanner(FacilityLocationPlanner):
                 current_task_id,
             )
             possible_costs.append(plan_info2["cost"])
-            logger.debug(f"  Considering possible preference response: {possible_pref_response}")
+            logger.debug(
+                f"  Considering possible preference response: {possible_pref_response}"
+            )
             logger.debug(f"  Plan 2 cost: {plan_info2['cost']}")
-            # XXX this is a hack
-            # expected_improvement = plan_info1["cost"] - plan_info2["cost"]
-            # if expected_improvement > 0:
-            # return plan2, plan_info2
         # assume robot asks for preference
         expected_possible_cost = np.dot(possible_costs, pref_belief)
-        logger.debug(f"    Expected cost after pref: {expected_possible_cost} vs {plan_info1['cost']} now ")
+        logger.debug(
+            f"    Expected cost after pref: {expected_possible_cost} vs {plan_info1['cost']} now "
+        )
         if expected_possible_cost + self.cost_cfg["ASK_PREF"] < plan_info1["cost"]:
             logger.debug("  Asking for preference")
             # __import__('ipdb').set_trace()
@@ -663,8 +677,7 @@ if __name__ == "__main__":
                     )
                     * cost_cfg["fail_cost"]
                 )
-                pot_skills = skills + \
-                    [{"policy": None, "train_task": tasks[0]}]
+                pot_skills = skills + [{"policy": None, "train_task": tasks[0]}]
                 pot_total_fail_cost = (
                     np.array(
                         [

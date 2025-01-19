@@ -1,14 +1,15 @@
 import logging
+import pdb
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from pprint import pformat
+import time
 
 import numpy as np
-import pdb
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 # logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class InteractionPlanner(ABC):
@@ -51,8 +52,8 @@ class InteractionPlanner(ABC):
             executed_task_ids.append(task_id)
             logger.debug(f"Executing task {task_id}")
             logger.debug(f"  Task: {pformat(task)}")
-            pref_beliefs = self.belief_estimator.beliefs #[task_id:]
-            print("PASSED IN pref_beliefs", pref_beliefs)
+            pref_beliefs = self.belief_estimator.beliefs
+            # print("PASSED IN pref_beliefs", pref_beliefs)
             plan, plan_info = self.plan(
                 task_seq,  # [task_id:],
                 pref_beliefs,
@@ -60,16 +61,14 @@ class InteractionPlanner(ABC):
                 pref_similarity_fn,
                 task_id,
             )
-            # print("plan", plan)
-            # print("plan_info", plan_info)
-            # pdb.set_trace()
+            logger.debug(f"  Precomputation time: {plan_info['precomputation_time']}")
+            logger.debug(f"  Facility location solve time: {plan_info['solve_time']}")
             action = plan[0]
             executed_actions.append(action)
             obs, rew, done, info = self.interaction_env.step(action)
-            print("action", action)
-            print("rew", rew)
-            print()
-            executed_beliefs.append(deepcopy(self.belief_estimator.beliefs[task_id]))
+
+            executed_beliefs.append(
+                deepcopy(self.belief_estimator.beliefs[task_id]))
             if action["action_type"] == "ASK_SKILL":
                 self.robot_skills.append(
                     {
@@ -83,7 +82,9 @@ class InteractionPlanner(ABC):
 
             elif action["action_type"] == "ASK_PREF":
                 self.belief_estimator.update_beliefs(task_id, info)
-                logger.debug(f"  Updated beliefs: {pformat(self.belief_estimator.beliefs)}")
+                logger.debug(
+                    f"  Updated beliefs: {pformat(self.belief_estimator.beliefs)}"
+                )
                 print("beliefs", self.belief_estimator.beliefs)
 
             elif action["action_type"] == "ROBOT":
@@ -107,27 +108,25 @@ class InteractionPlanner(ABC):
             logger.debug("------------------------")
             for i, (action, rew) in enumerate(zip(executed_actions, actual_rews)):
                 executed_task = task_seq[executed_task_ids[i]]
-                logger.debug(f"  Round {i}: Task {executed_task_ids[i]} {executed_task['obj_type']}-{executed_task['obj_color']} \n \
-                             \t\t\t\t\t\t\t {action}, belief: {executed_beliefs[i]}, {rew}\n")
+                logger.debug(
+                    f"  Round {i}: Task {executed_task_ids[i]} {self.get_task_desc(executed_task)} \n \t\t\t\t\t\t\t {action}, belief: {executed_beliefs[i]}, {rew}\n"
+                )
 
             if info["current_task_id"] == task_id:
                 resultant_objects.append((task_id))
-                resultant_actions.append([action['action_type']])
+                resultant_actions.append([action["action_type"]])
                 placements.append([info["pref"]])
             else:
-                print("action", action)
-                print("info", info)
-                print("executed_task", executed_task)
-                if len(resultant_objects) > 0 and resultant_objects[-1]==task_id:
-                    resultant_actions[-1].append(action['action_type'])
-                    if action['action_type'] == 'HUMAN':
+                if len(resultant_objects) > 1 and resultant_objects[-1] == task_id:
+                    resultant_actions[-1].append(action["action_type"])
+                    if action["action_type"] == "HUMAN":
                         placements[-1].append(info["pref"])
                     else:
                         placements[-1].append(action["pref"])
                 else:
                     resultant_objects.append((task_id))
-                    resultant_actions.append([action['action_type']])
-                    if action['action_type'] == 'HUMAN':
+                    resultant_actions.append([action["action_type"]])
+                    if action["action_type"] == "HUMAN":
                         placements.append([info["pref"]])
                     else:
                         placements.append([action["pref"]])
@@ -136,25 +135,67 @@ class InteractionPlanner(ABC):
             print("executed_task_ids", executed_task_ids)
             print("task_id", task_id)
 
-
         logger.info("Interaction statistics:")
         logger.info("-----------------------")
         logger.info(f"  Total reward: {total_rew}")
         logger.info("  Actions executed:")
-        logger.info(f"   #teach: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_SKILL'])}")
-        logger.info(f"   #human: {sum([1 for a in executed_actions if a['action_type'] == 'HUMAN'])}")
-        logger.info(f"   #pref: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_PREF'])}")
-        logger.info(f"   #robot: {sum([1 for a in executed_actions if a['action_type'] == 'ROBOT'])}")
+        logger.info(
+            f"   #teach: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_SKILL'])}"
+        )
+        logger.info(
+            f"   #human: {sum([1 for a in executed_actions if a['action_type'] == 'HUMAN'])}"
+        )
+        logger.info(
+            f"   #pref: {sum([1 for a in executed_actions if a['action_type'] == 'ASK_PREF'])}"
+        )
+        logger.info(
+            f"   #robot: {sum([1 for a in executed_actions if a['action_type'] == 'ROBOT'])}"
+        )
 
-        resultant_objects = [task_seq[i]['obj_color']+' '+task_seq[i]['obj_type'] for i in resultant_objects]
+        resultant_objects = [
+            (
+                task_seq[i]["obj_color"] + " " + task_seq[i]["obj_type"]
+                if "obj_color" in task_seq[i]
+                else self.get_task_desc(task_seq[i])
+            )
+            for i in resultant_objects
+        ]
         return total_rew, resultant_objects, resultant_actions, placements
+
+    @staticmethod
+    def get_task_desc(task):
+        task_desc = task["obj_type"]
+        if "obj_color" in task:
+            task_desc += task_desc + "-" + executed_task["obj_color"]
+        return task_desc
+
+    def compute_planning_time(self, task_seq, task_similarity_fn, pref_similarity_fn):
+        self.robot_skills = []
+        self.interaction_env.reset(task_seq)
+        task_id = 0
+        pref_beliefs = self.belief_estimator.beliefs  # [task_id:]
+        plan, plan_info = self.plan(
+            task_seq,  # [task_id:],
+            pref_beliefs,
+            task_similarity_fn,
+            pref_similarity_fn,
+            task_id,
+        )
+        return plan_info
 
 
 class AlwaysHuman(InteractionPlanner):
     def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
         super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
 
-    def plan(self, task_seq, pref_beliefs, task_similarity_fn, pref_similarity_fn, current_task_id):
+    def plan(
+        self,
+        task_seq,
+        pref_beliefs,
+        task_similarity_fn,
+        pref_similarity_fn,
+        current_task_id,
+    ):
         """
         Plan
         """
@@ -165,7 +206,14 @@ class AlwaysLearn(InteractionPlanner):
     def __init__(self, interaction_env, belief_estimator, planner_cfg, cost_cfg):
         super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
 
-    def plan(self, task_seq, pref_beliefs, task_similarity_fn, pref_similarity_fn, current_task_id):
+    def plan(
+        self,
+        task_seq,
+        pref_beliefs,
+        task_similarity_fn,
+        pref_similarity_fn,
+        current_task_id,
+    ):
         """
         Plan
         """
@@ -177,7 +225,14 @@ class LearnThenRobot(InteractionPlanner):
         super().__init__(interaction_env, belief_estimator, planner_cfg, cost_cfg)
         self.iter = 0
 
-    def plan(self, task_seq, pref_beliefs, task_similarity_fn, pref_similarity_fn, current_task_id):
+    def plan(
+        self,
+        task_seq,
+        pref_beliefs,
+        task_similarity_fn,
+        pref_similarity_fn,
+        current_task_id,
+    ):
         """
         Plan
         """
