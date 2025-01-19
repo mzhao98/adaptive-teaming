@@ -2,16 +2,15 @@ import logging
 import os
 import pdb
 import random
-from os.path import join
 import time
+from os.path import join
 
 import hydra
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-
-from adaptive_teaming.skills.pick_place_skills import PickPlaceExpertSkill
 from adaptive_teaming.planner import TaskRelevantInfoGainPlanner
+from adaptive_teaming.skills.pick_place_skills import PickPlaceExpertSkill
 from adaptive_teaming.utils.collect_demos import collect_demo_in_gridworld
 from adaptive_teaming.utils.utils import pkl_dump, pkl_load
 from hydra.utils import to_absolute_path
@@ -95,6 +94,8 @@ def make_planner(interaction_env, belief_estimator, cfg):
 
         planner_cfg = cfg[cfg.planner]
         planner = TaskRelevantInfoGainPlanner(
+            interaction_env, belief_estimator, planner_cfg, cfg.cost_cfg
+        )
     elif cfg.planner == "fc_greedy_planner":
         from adaptive_teaming.planner import FacilityLocationGreedyPlanner
 
@@ -249,7 +250,7 @@ def randomize_gridworld_task_seq(env, cfg, n_objs=10, seed=42, gridsize=8):
     np.random.seed(seed)
 
     # randomly assign objects to locations
-    objs_list = ["Box", 'Ball']
+    objs_list = ["Box", "Ball"]
     colors_list = ["red", "green", "blue", "yellow"]
 
     # create a list of n_objs objects
@@ -421,6 +422,7 @@ def save_task_imgs(env, task_seq):
         img.save(f"tasks/task_{i}.png")
     env.render_mode = render_mode
 
+
 def plot_interaction(objects, actions, placements, plannername):
     """
     Plots a bar chart of actions performed for each object.
@@ -523,9 +525,9 @@ def plot_interaction(objects, actions, placements, plannername):
     ax.set_yticklabels(action_order)
 
     # Set the y-axis label and x-axis label
-    ax.set_ylabel('Action Name')
-    ax.set_xlabel('Object Name')
-    ax.set_title(f'Actions Performed on Objects: {plannername}')
+    ax.set_ylabel("Action Name")
+    ax.set_xlabel("Object Name")
+    ax.set_title(f"Actions Performed on Objects: {plannername}")
 
     # Add legend
     # patches = [mpatches.Patch(color=color, label=action) for action, color in action_colors.items()]
@@ -575,7 +577,7 @@ def compute_ufl_plan_time(cfg, num_objs_min=50, num_objs_max=501):
             belief_estimator = make_belief_estimator(cfg, env, task_seq)
             planner = make_planner(interaction_env, belief_estimator, cfg)
 
-            plan_info= planner.compute_planning_time(
+            plan_info = planner.compute_planning_time(
                 task_seq,
                 interaction_env.task_similarity,
                 interaction_env.pref_similarity,
@@ -657,7 +659,8 @@ def main(cfg):
     # resultant_actions = [[a["action_type"] for a in actions] for actions in resultant_actions]
     print(f"Resultant actions: {resultant_actions}")
     print(f"Placements: {placements}")
-    plot_interaction(resultant_objects, resultant_actions, placements, cfg.planner)
+    plot_interaction(resultant_objects, resultant_actions,
+                     placements, cfg.planner)
     print("total_rew", total_rew)
 
 
