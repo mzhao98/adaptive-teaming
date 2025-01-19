@@ -1,7 +1,7 @@
 # Low cost when human contributes.
 ROBOT: 10
 HUMAN: 30
-ASK_SKILL: 30
+ASK_SKILL: 100
 ASK_PREF: 5
 FAIL: 400
 PREF_COST: 400

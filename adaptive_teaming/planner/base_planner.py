@@ -52,6 +52,7 @@ class InteractionPlanner(ABC):
             logger.debug(f"Executing task {task_id}")
             logger.debug(f"  Task: {pformat(task)}")
             pref_beliefs = self.belief_estimator.beliefs #[task_id:]
+            print("PASSED IN pref_beliefs", pref_beliefs)
             plan, plan_info = self.plan(
                 task_seq,  # [task_id:],
                 pref_beliefs,
@@ -59,11 +60,15 @@ class InteractionPlanner(ABC):
                 pref_similarity_fn,
                 task_id,
             )
+            # print("plan", plan)
+            # print("plan_info", plan_info)
             # pdb.set_trace()
             action = plan[0]
             executed_actions.append(action)
             obs, rew, done, info = self.interaction_env.step(action)
-
+            print("action", action)
+            print("rew", rew)
+            print()
             executed_beliefs.append(deepcopy(self.belief_estimator.beliefs[task_id]))
             if action["action_type"] == "ASK_SKILL":
                 self.robot_skills.append(
@@ -113,7 +118,7 @@ class InteractionPlanner(ABC):
                 print("action", action)
                 print("info", info)
                 print("executed_task", executed_task)
-                if len(resultant_objects) > 1 and resultant_objects[-1]==task_id:
+                if len(resultant_objects) > 0 and resultant_objects[-1]==task_id:
                     resultant_actions[-1].append(action['action_type'])
                     if action['action_type'] == 'HUMAN':
                         placements[-1].append(info["pref"])

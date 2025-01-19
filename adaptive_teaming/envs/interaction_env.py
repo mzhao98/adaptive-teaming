@@ -37,10 +37,12 @@ class InteractionEnv:
         """
         task = self.task_seq[self.current_task_id]
         if action["action_type"] == "ROBOT":
+
             skill = self.robot_skills[action["skill_id"]]
             obs, rew, done, info = self.robot_step(
                 task, skill, action["pref"]
             )
+            # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
             obs, rew, done, info = self.human_step(task)
@@ -67,18 +69,25 @@ class InteractionEnv:
         Take a robot step.
         """
         obs = self.env.reset_to_state(task)
+        print("task", task)
         obs, rew, done, info = skill.step(self.env, pref_params, obs)
         # env reward is irrelevant
+        # pdb.set_trace()
+
         rew = 0
-        if info["safety_violated"]:
+        if info["safety_violated"] is True:
             # rew -= 100 # I think this should be fail cost
             rew -= self.cost_cfg['FAIL']
 
+
         human_sat = self.human_evaluation_of_robot(
             None)
+        # if human_sat == 0:
+        #     pdb.set_trace()
         rew -= (1 - human_sat) * self.cost_cfg["PREF_COST"]
 
         rew -= self.cost_cfg["ROBOT"]
+        # pdb.set_trace()
         return None, rew, True, {}
 
     # human model
