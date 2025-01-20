@@ -84,6 +84,10 @@ class GridWorld(MiniGridEnv):
         pmf over this space."""
         return list(self.goals.keys())
 
+    @property
+    def has_renderer(self):
+        return self.render_mode == "human"
+
     def reset_to_state(self, state):
         """Reset the environment to a specific state."""
 

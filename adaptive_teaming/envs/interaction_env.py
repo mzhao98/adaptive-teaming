@@ -45,7 +45,7 @@ class InteractionEnv:
             # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
-            obs, rew, done, info = self.human_step(None, task)
+            obs, rew, done, info = self.human_step(human_pref=None, task=task)
             self.current_task_id += 1
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
@@ -95,8 +95,9 @@ class InteractionEnv:
     def human_step(self, human_pref, task):
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
-        for _ in range(10):
-            self.env.render()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {'pref': human_pref}
 
     def query_skill(self, task, pref):
@@ -105,8 +106,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        for _ in range(10):
-            self.env.render()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {}
 
     def query_skill_pref(self, task):
@@ -116,8 +118,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        for _ in range(10):
-            self.env.render()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {}
 
     def query_pref(self, task):
@@ -126,9 +129,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_PREF"]
-        for _ in range(10):
-            self.env.render()
-        # pdb.set_trace()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {}
 
     @abstractmethod

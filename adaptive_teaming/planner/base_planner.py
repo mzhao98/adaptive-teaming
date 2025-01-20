@@ -166,7 +166,7 @@ class InteractionPlanner(ABC):
     def get_task_desc(task):
         task_desc = task["obj_type"]
         if "obj_color" in task:
-            task_desc += task_desc + "-" + executed_task["obj_color"]
+            task_desc += task_desc + "-" + task["obj_color"]
         return task_desc
 
     def compute_planning_time(self, task_seq, task_similarity_fn, pref_similarity_fn):
