@@ -104,8 +104,7 @@ class FacilityLocationPlanner(InteractionPlanner):
                 test_task = task_seq[test_task_id]
                 # XXX robot specifically asks for a skill with a pref params
                 # XXX this will be the mle pref of the user ofc
-                service_costs[(facility, test_task_id)
-                              ] = c_rob
+                service_costs[(facility, test_task_id)] = c_rob
                 pref_belief = pref_beliefs[test_task_id]
                 # mle_test_pref = pref_space[np.argmax(pref_belief)]
                 # argmin over pref params
@@ -113,10 +112,8 @@ class FacilityLocationPlanner(InteractionPlanner):
                     Pi_transfer(task, test_task, mle_train_pref, pref)
                     for pref in pref_space
                 ]
-                execution_costs = (1 - np.array(pi_transfers)
-                                   ) * c_fail 
-                pref_costs = (1 - np.array(pref_belief)) * \
-                    c_pref
+                execution_costs = (1 - np.array(pi_transfers)) * c_fail
+                pref_costs = (1 - np.array(pref_belief)) * c_pref
 
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug(f" Belief pref costs: {pref_costs}")
@@ -164,9 +161,8 @@ class FacilityLocationPlanner(InteractionPlanner):
                     facilities.append(facility)
                     setup_costs[facility] = 0  # already learned
                 logger.debug(f"  Adding ROBOT facility  for task {task_id}")
-                service_costs[(facility, task_id)] = (
-                    c_rob + best_execution_cost
-                )
+                service_costs[(facility, task_id)] = c_rob + \
+                    best_execution_cost
 
         precomputation_time = time.time() - start_time
 
@@ -286,13 +282,16 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
     """
     Implements a greedy version of the facility location planner.
     """
+    use_improvement1 = True #False
+    use_improvement2 = True #False
 
     def _solve_facility_location(
         self, demands, facilities, setup_costs, service_costs, demand_start_index
     ):
         # future demands
-        S = set(range(demand_start_index, demand_start_index +
-                      len(demands)))
+        S = set(range(demand_start_index, demand_start_index + len(demands)))
+        # algorithm will update this
+        working_setup_costs = deepcopy(setup_costs)
         X = []
         while not len(S) == 0:
             # choose best facility and subset of S
@@ -300,7 +299,7 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
             best_fac, best_assignment = None, None
             for fac in facilities:
                 logger.debug(f"  Facility: {fac}")
-                fac_setup_cost = setup_costs[fac]
+                fac_setup_cost = working_setup_costs[fac]
                 # find subset of client with best ratio
                 # get service costs
                 fac_service_keys = [
@@ -316,7 +315,28 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
 
                 for i, index in enumerate(sorted_indices):
                     service_cost_sum += fac_service_costs[index]
-                    ratio = (fac_setup_cost + service_cost_sum) / (i + 1)
+                    improvement = fac_setup_cost + service_cost_sum
+                    # add improvement in the cost of previously opened facility
+                    cost_decrement = 0
+                    if self.use_improvement1:
+                        for d in range(
+                            demand_start_index, demand_start_index + len(demands)
+                        ):
+                            # already assigned
+                            if d not in S and (fac, d) in service_costs:
+                                best_assigned_cost = np.min(
+                                    [
+                                        service_costs[(f, d)]
+                                        for f in X
+                                        if (f, d) in service_costs
+                                    ]
+                                )
+                                cost_decrement += max(
+                                    0, best_assigned_cost - service_costs[(fac, d)]
+                                )
+                                if cost_decrement > 0:
+                                    logger.debug(f"    Facility {fac} decrs cost of opened facs by {cost_decrement}")
+                    ratio = (improvement - cost_decrement) / (i + 1)
                     logger.debug(f"    Ratio: {ratio}")
                     if ratio < best_ratio:
                         logger.debug(
@@ -332,6 +352,10 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
             assigned_demands = [demand for (_, demand) in best_assignment]
             # open facility
             X.append(best_fac)
+            if self.use_improvement2:
+                # make setup cost 0 since it is already open
+                logger.info(f"  Settings setup cost to 0 for {best_fac}")
+                working_setup_costs[best_fac] = 0
             # remove assigned demands from S
             S.difference_update(assigned_demands)
             logger.debug(f"  Remaining demands: {S}")
@@ -430,7 +454,8 @@ class FacilityLocationPrefPlanner(InteractionPlanner):
             plan = plan1
             plan[0] = {"action_type": "ASK_PREF"}
             plan_info = plan_info1
-            plan_info["cost"] = expected_possible_cost + self.cost_cfg["ASK_PREF"]
+            plan_info["cost"] = expected_possible_cost + \
+                self.cost_cfg["ASK_PREF"]
             return plan, plan_info
         else:
             logger.debug("  Not asking for preference")
@@ -677,7 +702,8 @@ if __name__ == "__main__":
                     )
                     * cost_cfg["fail_cost"]
                 )
-                pot_skills = skills + [{"policy": None, "train_task": tasks[0]}]
+                pot_skills = skills + \
+                    [{"policy": None, "train_task": tasks[0]}]
                 pot_total_fail_cost = (
                     np.array(
                         [
