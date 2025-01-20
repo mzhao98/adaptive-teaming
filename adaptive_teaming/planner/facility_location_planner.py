@@ -42,7 +42,6 @@ class FacilityLocationPlanner(InteractionPlanner):
         pref_similarity_fn: function to compute similarity between task preferences
         """
         start_time = time.time()
-        N = len(task_seq[current_task_id:])
         pref_space = self.interaction_env.pref_space
         c_rob = self.cost_cfg["ROBOT"]
         c_hum = self.cost_cfg["HUMAN"]
@@ -282,8 +281,8 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
     """
     Implements a greedy version of the facility location planner.
     """
-    use_improvement1 = True #False
-    use_improvement2 = True #False
+    use_improvement1 = False
+    use_improvement2 = True
 
     def _solve_facility_location(
         self, demands, facilities, setup_costs, service_costs, demand_start_index
@@ -292,6 +291,7 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
         S = set(range(demand_start_index, demand_start_index + len(demands)))
         # algorithm will update this
         working_setup_costs = deepcopy(setup_costs)
+        best_service_costs = {demand: np.inf for demand in S}
         X = []
         while not len(S) == 0:
             # choose best facility and subset of S
@@ -324,17 +324,22 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
                         ):
                             # already assigned
                             if d not in S and (fac, d) in service_costs:
-                                best_assigned_cost = np.min(
-                                    [
-                                        service_costs[(f, d)]
-                                        for f in X
-                                        if (f, d) in service_costs
-                                    ]
-                                )
+                                # best_assigned_cost = np.min(
+                                    # [
+                                        # service_costs[(f, d)]
+                                        # for f in X
+                                        # if (f, d) in service_costs
+                                    # ]
+                                # )
+                                best_assigned_cost = best_service_costs[d]
                                 cost_decrement += max(
                                     0, best_assigned_cost - service_costs[(fac, d)]
                                 )
                                 if cost_decrement > 0:
+                                    if logger.isEnabledFor(logging.DEBUG):
+                                        logger.debug(
+                                            f"    Facility {fac} decrs cost of opened facs by {cost_decrement}"
+                                        )
                                     logger.debug(f"    Facility {fac} decrs cost of opened facs by {cost_decrement}")
                     ratio = (improvement - cost_decrement) / (i + 1)
                     logger.debug(f"    Ratio: {ratio}")
@@ -350,11 +355,16 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
 
             logger.debug(f"Best facility: {best_fac}")
             assigned_demands = [demand for (_, demand) in best_assignment]
+            for d in assigned_demands:
+                if service_costs[(best_fac, d)] < best_service_costs[d]:
+                    best_service_costs[d] = service_costs[(best_fac, d)] 
+            # __import__('ipdb').set_trace()
             # open facility
             X.append(best_fac)
             if self.use_improvement2:
                 # make setup cost 0 since it is already open
-                logger.info(f"  Settings setup cost to 0 for {best_fac}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"  Settings setup cost to 0 for {best_fac}")
                 working_setup_costs[best_fac] = 0
             # remove assigned demands from S
             S.difference_update(assigned_demands)
