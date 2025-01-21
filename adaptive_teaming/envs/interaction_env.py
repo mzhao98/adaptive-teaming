@@ -50,7 +50,14 @@ class InteractionEnv:
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
             self.robot_skills[self.current_task_id] = info["skill"]
+            if not info["teach_success"]:
+                # human has to intervene to complete the task
+                rew -= self.cost_cfg["HUMAN"]
             self.current_task_id += 1
+            # XXX if we want to be truly adaptive, the we should not move
+            # forward, but this will really disadvantage the baselines
+            # if info["teach_success"]:
+                # self.current_task_id += 1
         elif action["action_type"] == "ASK_PREF":
             obs, rew, done, info = self.query_pref(task)
         else:
@@ -70,7 +77,7 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         print("task", task)
-        obs, rew, done, info = skill.step(self.env, pref_params, obs)
+        obs, rew, done, info = skill.step(self.env, pref_params, obs, render=self.env.has_renderer)
         # env reward is irrelevant
         # pdb.set_trace()
 
@@ -109,7 +116,7 @@ class InteractionEnv:
         if self.env.has_renderer:
             for _ in range(10):
                 self.env.render()
-        return None, rew, True, {}
+        return obs, rew, True, {}
 
     def query_skill_pref(self, task):
         """

@@ -43,6 +43,7 @@ class FacilityLocationPlanner(InteractionPlanner):
         """
         start_time = time.time()
         pref_space = self.interaction_env.pref_space
+        teach_probs = self.belief_estimator.get_teach_probs()
         c_rob = self.cost_cfg["ROBOT"]
         c_hum = self.cost_cfg["HUMAN"]
         c_skill = self.cost_cfg["ASK_SKILL"]
@@ -95,9 +96,17 @@ class FacilityLocationPlanner(InteractionPlanner):
             setup_costs[facility] = c_skill
 
             # demo affects only current and future tasks.
-            # assume demo also complete the task perfectly
-            service_costs[(facility, task_id)] = 0
-            # for test_task_id in range(task_id + 1, N):
+            # cost is a function of Pr(teaching success)
+            if self.planner_cfg.teach_adaptive:
+                teach_prob = teach_probs[task_id]
+            else:
+                teach_prob = 1
+            # print("teach_prob", teach_prob)
+            # print("-----------------------")
+            teach_fail_prob = 1 - teach_prob
+
+            # gets assigned to human if teaching fails
+            service_costs[(facility, task_id)] = teach_fail_prob * c_hum
 
             for test_task_id in range(task_id, len(task_seq)):
                 test_task = task_seq[test_task_id]
@@ -108,7 +117,7 @@ class FacilityLocationPlanner(InteractionPlanner):
                 # mle_test_pref = pref_space[np.argmax(pref_belief)]
                 # argmin over pref params
                 pi_transfers = [
-                    Pi_transfer(task, test_task, mle_train_pref, pref)
+                    teach_prob * Pi_transfer(task, test_task, mle_train_pref, pref)
                     for pref in pref_space
                 ]
                 execution_costs = (1 - np.array(pi_transfers)) * c_fail
