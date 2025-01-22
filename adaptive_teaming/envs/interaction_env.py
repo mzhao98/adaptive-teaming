@@ -3,7 +3,7 @@ import logging
 from copy import copy
 import pdb
 logger = logging.getLogger(__name__)
-
+from adaptive_teaming.skills.gridworld_skills import PickPlaceSkill
 
 class InteractionEnv:
     """
@@ -26,7 +26,7 @@ class InteractionEnv:
         """
         self.task_seq = task_seq
         self.current_task_id = 0
-        self.robot_skills = self._init_robot_skills()
+        # self.robot_skills = self._init_robot_skills()
 
     def load_human_demos(self, human_demos):
         self.human_demos = human_demos
@@ -36,9 +36,15 @@ class InteractionEnv:
         Take a step in the interaction environment.
         """
         task = self.task_seq[self.current_task_id]
-        if action["action_type"] == "ROBOT":
 
-            skill = self.robot_skills[action["skill_id"]]
+        if action["action_type"] == "ROBOT":
+            # pdb.set_trace()
+            if action["skill_id"] not in self.robot_skills:
+                skill =  PickPlaceSkill([['backspace']], None, None)
+            else:
+                skill = self.robot_skills[action["skill_id"]]
+            # print("obj_loc", self.robot_skills[action["skill_id"]].obj_loc)
+            # print("obj_loc", self.robot_skills[action["skill_id"]].obj_type)
             obs, rew, done, info = self.robot_step(
                 task, skill, action["pref"]
             )
@@ -49,6 +55,7 @@ class InteractionEnv:
             self.current_task_id += 1
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
+            # pdb.set_trace()
             self.robot_skills[self.current_task_id] = info["skill"]
             self.current_task_id += 1
         elif action["action_type"] == "ASK_PREF":

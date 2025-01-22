@@ -4,8 +4,8 @@ from time import sleep
 
 import h5py
 import numpy as np
-import robosuite.utils.transform_utils as T
-from robosuite.utils.sim_utils import check_contact
+# import robosuite.utils.transform_utils as T
+# from robosuite.utils.sim_utils import check_contact
 
 
 class PickPlaceExpertSkill:

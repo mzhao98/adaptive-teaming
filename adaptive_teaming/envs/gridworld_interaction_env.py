@@ -23,6 +23,45 @@ def heuristic(a, b):
     """Manhattan distance heuristic for a grid."""
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
+def a_star_search_avoid_goals(grid, start, goal):
+    """A* algorithm for finding the shortest path."""
+    rows, cols = grid.shape
+    open_set = []
+    heapq.heappush(open_set, (0 + heuristic(start, goal), 0, start, []))
+    visited = set()
+
+    while open_set:
+        _, cost, current, path = heapq.heappop(open_set)
+
+        if current in visited:
+            continue
+        visited.add(current)
+
+        path = path + [current]
+
+        if current == goal:
+            return path
+
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            neighbor = (current[0] + dx, current[1] + dy)
+            if (
+                0 <= neighbor[0] < rows
+                and 0 <= neighbor[1] < cols
+                and grid[neighbor[0], neighbor[1]] != 1
+                and grid[neighbor[0], neighbor[1]] != 2
+                and neighbor not in visited
+            ):
+                heapq.heappush(
+                    open_set,
+                    (
+                        cost + 1 + heuristic(neighbor, goal),
+                        cost + 1,
+                        neighbor,
+                        path,
+                    ),
+                )
+    return None
+
 def a_star_search(grid, start, goal):
     """A* algorithm for finding the shortest path."""
     rows, cols = grid.shape
@@ -180,10 +219,10 @@ def convert_to_turn_based_actions_to_goal(obj_type, path, pick_up_object, drop_o
         next_direction = directions[move]
         # print("(current_direction, next_direction)", (current_heading, next_direction))
 
-        if current_heading == next_direction:
-            actions.append("up")  # Move forward
+        # if current_heading == next_direction:
+        #     actions.append("up")  # Move forward
 
-        else:
+        # else:
             # # Determine turn direction
             # if (current_direction, next_direction) in [('N', 'E'), ('E', 'S'), ('S', 'W'), ('W', 'N')]:
             #     actions.append("right")
@@ -192,21 +231,21 @@ def convert_to_turn_based_actions_to_goal(obj_type, path, pick_up_object, drop_o
             # elif (current_direction, next_direction) in [('N', 'S'), ('S', 'N'), ('E', 'W'), ('W', 'E')]:
             #     actions.append("right")
             #     actions.append("right")
-            while current_heading != next_direction:
-                actions.append("right")
-                if current_heading == 'N':
-                    current_heading = 'E'
-                elif current_heading == 'E':
-                    current_heading = 'S'
-                elif current_heading == 'S':
-                    current_heading = 'W'
-                elif current_heading == 'W':
-                    current_heading = 'N'
+        while current_heading != next_direction:
+            actions.append("right")
+            if current_heading == 'N':
+                current_heading = 'E'
+            elif current_heading == 'E':
+                current_heading = 'S'
+            elif current_heading == 'S':
+                current_heading = 'W'
+            elif current_heading == 'W':
+                current_heading = 'N'
 
-            # if pick_up_object and i == len(path) - 1:
-            #     print("skipping")
-            # else:
-            actions.append("up")  # Move forward after turning
+        # if pick_up_object and i == len(path) - 1:
+        #     print("skipping")
+        # else:
+        actions.append("up")  # Move forward after turning
         # current_direction = next_direction
 
 
@@ -244,7 +283,8 @@ class GridWorldInteractionEnv(InteractionEnv):
         self.env.mission = "User's turn"
         human_pref = self._get_human_pref_for_object(
             self.env.objects[0]["object"])
-        return super().human_step(human_pref, *args, **kwargs)
+
+        return super().human_step(human_pref, args[1])
 
     def query_skill_from_saved_demos(self, task, pref):
         """
@@ -290,10 +330,14 @@ class GridWorldInteractionEnv(InteractionEnv):
                 # print(cell_type)
                 # pdb.set_trace()
                 easy_grid[j, i] = type_to_encoding[cell_type]
+                print("j, i", j, i)
+                print("cell_type", cell_type)
+                print("type_to_encoding[cell_type]", type_to_encoding[cell_type])
                 if type_to_encoding[cell_type] == 3:
                     obj_position = (j, i)
 
-
+        print("current obj", self.env.objects[0]["object"].cur_pos)
+        print("easy_grid", easy_grid)
         correct_goal = self._get_human_pref_for_object(self.env.objects[0]["object"])
         agent_start_pos = self.env.agent_start_pos # (1,1)
         goals = self.env.get_goals()
@@ -303,12 +347,18 @@ class GridWorldInteractionEnv(InteractionEnv):
         # pdb.set_trace()
 
         obj_type = task["obj_type"]
+        obj_color = task["obj_color"]
         start = agent_start_pos
         object_location = obj_position
         goal_location = goals[correct_goal]
+        # pdb.set_trace()
 
         # Path to object
-        path_to_object = a_star_search(easy_grid, start, object_location)
+        print("start", start)
+        print("object_location", object_location)
+        print("goal_location", goal_location)
+        path_to_object = a_star_search_avoid_goals(easy_grid, start, object_location)
+        assert len(path_to_object) > 1
         # Path from object to goal
         path_from_object_to_goal = a_star_search(easy_grid, object_location, goal_location)
         print("path_to_object", path_to_object)
@@ -333,13 +383,13 @@ class GridWorldInteractionEnv(InteractionEnv):
             print("Actions:", actions)
         else:
             print("Path not found.")
-
+        actions.append('enter')
         # pdb.set_trace()
         # render_path(easy_grid, full_path)
         demo = actions
         # demo = self.human_demos[demo_key]
         # create skill from demo
-        skill = PickPlaceSkill([demo])
+        skill = PickPlaceSkill([demo], (obj_type, obj_color), (obj_position[1], obj_position[0]))
         info.update({"skill": skill, "pref": pref})
         return None, rew, True, info
 
@@ -427,6 +477,7 @@ class GridWorldInteractionEnv(InteractionEnv):
         # elif obj.type == "box":
         #     return "G2"
         # else:
+        # print("self.true_human_pref", self.true_human_pref)
         if (obj.type, obj.color) in self.true_human_pref:
             return self.true_human_pref[(obj.type, obj.color)]
         else:

@@ -123,8 +123,8 @@ class GridWorld(MiniGridEnv):
             # if fwd_cell is None or fwd_cell.can_overlap():
             if fwd_cell is None or fwd_cell.type != 'wall':
                 self.agent_pos = tuple(fwd_pos)
-            if fwd_cell is not None and fwd_cell.type == "goal":
-                terminated = True
+            # if fwd_cell is not None and fwd_cell.type == "goal":
+            #     terminated = True
                 reward = self._reward()
             # if fwd_cell is not None and fwd_cell.type == "lava":
             #     terminated = True

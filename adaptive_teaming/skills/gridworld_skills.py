@@ -2,9 +2,11 @@ from minigrid.core.actions import Actions
 import pdb
 
 class PickPlaceSkill:
-    def __init__(self, plans):
+    def __init__(self, plans, obj_type, obj_loc):
         # one plan for each goal
         self.plans = plans
+        self.obj_type = obj_type
+        self.obj_loc = obj_loc
 
     def step(self, env, pref_params, obs):
         key_to_action = {
@@ -55,6 +57,7 @@ class PickPlaceSkill:
                 print("spot picked up", env.carrying.cur_pos)
 
         # pdb.set_trace()
+        info = {}
         info["safety_violated"] = False
         # print("done", done)
         # print("info", info)

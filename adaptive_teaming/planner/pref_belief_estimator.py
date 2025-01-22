@@ -2,6 +2,7 @@ import logging
 from abc import abstractmethod
 
 import numpy as np
+import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,8 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
         self.env = env
         # indexed by task id
         self.beliefs = [self.prior() for _ in range(len(task_seq))]
+        # print("self.beliefs:", self.beliefs)
+        # pdb.set_trace()
 
     def prior(self):
         """

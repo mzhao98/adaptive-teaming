@@ -53,7 +53,8 @@ class InteractionPlanner(ABC):
             logger.debug(f"Executing task {task_id}")
             logger.debug(f"  Task: {pformat(task)}")
             pref_beliefs = self.belief_estimator.beliefs
-            # print("PASSED IN pref_beliefs", pref_beliefs)
+            print("PASSED IN pref_beliefs", pref_beliefs)
+            # pdb.set_trace()
             plan, plan_info = self.plan(
                 task_seq,  # [task_id:],
                 pref_beliefs,
@@ -61,11 +62,15 @@ class InteractionPlanner(ABC):
                 pref_similarity_fn,
                 task_id,
             )
-            logger.debug(f"  Precomputation time: {plan_info['precomputation_time']}")
-            logger.debug(f"  Facility location solve time: {plan_info['solve_time']}")
+            # logger.debug(f"  Precomputation time: {plan_info['precomputation_time']}")
+            # logger.debug(f"  Facility location solve time: {plan_info['solve_time']}")
             action = plan[0]
             executed_actions.append(action)
             obs, rew, done, info = self.interaction_env.step(action)
+            print("info", info)
+            print("action", action)
+            print("rew", rew)
+            print()
 
             executed_beliefs.append(
                 deepcopy(self.belief_estimator.beliefs[task_id]))
@@ -117,7 +122,7 @@ class InteractionPlanner(ABC):
                 resultant_actions.append([action["action_type"]])
                 placements.append([info["pref"]])
             else:
-                if len(resultant_objects) > 1 and resultant_objects[-1] == task_id:
+                if len(resultant_objects) > 0 and resultant_objects[-1] == task_id:
                     resultant_actions[-1].append(action["action_type"])
                     if action["action_type"] == "HUMAN":
                         placements[-1].append(info["pref"])
@@ -166,7 +171,7 @@ class InteractionPlanner(ABC):
     def get_task_desc(task):
         task_desc = task["obj_type"]
         if "obj_color" in task:
-            task_desc += task_desc + "-" + executed_task["obj_color"]
+            task_desc += task_desc + "-" + task["obj_color"]
         return task_desc
 
     def compute_planning_time(self, task_seq, task_similarity_fn, pref_similarity_fn):

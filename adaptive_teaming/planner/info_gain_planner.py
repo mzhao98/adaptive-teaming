@@ -46,6 +46,7 @@ class InfoGainPlanner(InteractionPlanner):
         plan_info {'cost': 500.0, 'assignments': {(('HUMAN', 'task-0'), 0): 1.0, (('HUMAN', 'task-1'), 1): 1.0, (('HUMAN', 'task-2'), 2): 1.0, (('HUMAN', 'task-3'), 3): 1.0, (('HUMAN', 'task-4'), 4): 1.0, (('HUMAN', 'task-5'), 5): 1.0, (('HUMAN', 'task-6'), 6): 1.0, (('HUMAN', 'task-7'), 7): 1.0, (('HUMAN', 'task-8'), 8): 1.0, (('HUMAN', 'task-9'), 9): 1.0}}
 
         """
+
         N = len(task_seq[current_task_id:])
         # some large constant
         M = sum(val for val in self.cost_cfg.values())
@@ -72,11 +73,12 @@ class InfoGainPlanner(InteractionPlanner):
                     init_entropy_gi = entropy(distr_gi)
                     # compute the new belief
                     new_belief_distr_gi = deepcopy(distr_gi)
-                    new_belief_distr_gi[pref_idx] = 1
+                    if pref_idx == g_idx:
+                        new_belief_distr_gi[0] = 1
 
-                    for other_pref_idx in range(len(new_belief_distr_gi)):
-                        if other_pref_idx != pref_idx:
-                            new_belief_distr_gi[other_pref_idx] = 0
+                        for other_pref_idx in range(len(new_belief_distr_gi)):
+                            if other_pref_idx != pref_idx:
+                                new_belief_distr_gi[other_pref_idx] = 0
 
                     # normalize new belief
                     # new_belief_distr_gi = new_belief_distr_gi / np.sum(new_belief_distr_gi)
@@ -168,8 +170,10 @@ class InfoGainPlanner(InteractionPlanner):
             plan[0]['task'] = task_seq[current_task_id]
             # find skill id for the task
             for idx in range(len(self.robot_skills)):
-                if self.robot_skills[idx]['task'] == task_seq[current_task_id] and self.robot_skills[idx]['pref'] == pref_space[pref_choice]:
-                    plan[0]['skill_id'] = idx
+                if (self.robot_skills[idx]['task'] == task_seq[current_task_id] and
+                        self.robot_skills[idx]['pref'] == pref_space[pref_choice]):
+                    plan[0]['skill_id'] = self.robot_skills[idx]['skill_id']
+                    # pdb.set_trace()
                     break
 
         plan_info = {}
@@ -225,12 +229,16 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
                     print("distr_gi", distr_gi)
                     init_entropy_gi = entropy(distr_gi)
                     # compute the new belief
-                    new_belief_distr_gi = deepcopy(distr_gi)
-                    new_belief_distr_gi[pref_idx] = 1
+                    print("pref_idx", pref_idx)
+                    print("dist_gi", distr_gi)
 
-                    for other_pref_idx in range(len(new_belief_distr_gi)):
-                        if other_pref_idx != pref_idx:
-                            new_belief_distr_gi[other_pref_idx] = 0
+                    new_belief_distr_gi = deepcopy(distr_gi)
+                    if pref_idx == g_idx:
+                        new_belief_distr_gi[0] = 1
+
+                        for other_pref_idx in range(len(new_belief_distr_gi)):
+                            if other_pref_idx != pref_idx:
+                                new_belief_distr_gi[other_pref_idx] = 0
 
                     # normalize new belief
                     # new_belief_distr_gi = new_belief_distr_gi / np.sum(new_belief_distr_gi)
@@ -330,7 +338,8 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
             # find skill id for the task
             for idx in range(len(self.robot_skills)):
                 if self.robot_skills[idx]['task'] == task_seq[current_task_id] and self.robot_skills[idx]['pref'] == pref_space[pref_choice]:
-                    plan[0]['skill_id'] = idx
+                    plan[0]['skill_id'] = self.robot_skills[idx]['skill_id']
+                    # pdb.set_trace()
                     break
 
         plan_info = {}
