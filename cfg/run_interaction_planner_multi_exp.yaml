@@ -16,7 +16,7 @@ wandb:
 
 env: med_gridworld
 prob_skill_teaching_success: 0
-planner: [fc_pref_planner, task_info_gain_planner, confidence_based_planner, naive_greedy_planner] #[] #[fc_adaptive_pref_planner, fc_pref_planner, task_info_gain_planner, info_gain_planner, confidence_based_planner]
+planner: [fc_pref_planner, task_info_gain_planner, confidence_based_planner, naive_greedy_planner, confidence_learner_planner] #[] #[fc_adaptive_pref_planner, fc_pref_planner, task_info_gain_planner, info_gain_planner, confidence_based_planner]
 N_exps: 30
 fc_planner: greedy
 
@@ -36,12 +36,15 @@ human_model:
   demo_file: ${data_dir}/${env}_demo.pkl
 
 task_seq:
-  num_tasks: 20
+  num_tasks: 25
 
 # Planners
 fc_adaptive_pref_planner:
 
 naive_greedy_planner:
+
+confidence_learner_planner:
+    confidence_threshold: 0.8
 
 info_gain_planner:
   cost_scale_factor: 0.1

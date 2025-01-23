@@ -1,7 +1,7 @@
-# A normative cost model.
+# Low cost when human contributes.
 ROBOT: 10
 HUMAN: 60
 ASK_SKILL: 100
 ASK_PREF: 20
-FAIL: 200
+FAIL: 300
 PREF_COST: 200
