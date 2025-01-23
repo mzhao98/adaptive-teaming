@@ -66,23 +66,31 @@ class InteractionPlanner(ABC):
             # logger.debug(f"  Facility location solve time: {plan_info['solve_time']}")
             action = plan[0]
             executed_actions.append(action)
+            # print()
+            # print("action", action)
+            # print("interaction env", self.interaction_env)
+            # print('teach_probs', self.interaction_env.teach_probs)
+            # print('robot skills', self.interaction_env.robot_skills)
+
+
             obs, rew, done, info = self.interaction_env.step(action)
-            print("info", info)
-            print("action", action)
-            print("rew", rew)
-            print()
+            # print("info", info)
+            # print("rew", rew)
+
 
             executed_beliefs.append(
                 deepcopy(self.belief_estimator.beliefs[task_id]))
             if action["action_type"] == "ASK_SKILL":
-                self.robot_skills.append(
-                    {
-                        "task": task,
-                        "skill_id": task_id,
-                        "pref": info["pref"],
-                        "skill": info["skill"],
-                    }
-                )
+                if info['teach_success'] is True:
+                    self.robot_skills.append(
+                        {
+                            "task": task,
+                            "skill_id": task_id,
+                            "pref": info["pref"],
+                            "skill": info["skill"],
+                        }
+                    )
+
                 self.belief_estimator.update_beliefs(task_id, info)
 
             elif action["action_type"] == "ASK_PREF":

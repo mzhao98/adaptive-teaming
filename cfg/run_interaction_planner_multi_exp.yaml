@@ -15,9 +15,10 @@ wandb:
   group: ${env}-${planner}
 
 env: med_gridworld
-planner: [fc_pref_planner, task_info_gain_planner, info_gain_planner, confidence_based_planner] #info_gain_planner
+prob_skill_teaching_success: 0
+planner: [fc_pref_planner, task_info_gain_planner, confidence_based_planner, naive_greedy_planner] #[] #[fc_adaptive_pref_planner, fc_pref_planner, task_info_gain_planner, info_gain_planner, confidence_based_planner]
 N_exps: 30
-fc_planner: mip
+fc_planner: greedy
 
 render: False
 collect_demo: False
@@ -38,6 +39,9 @@ task_seq:
   num_tasks: 20
 
 # Planners
+fc_adaptive_pref_planner:
+
+naive_greedy_planner:
 
 info_gain_planner:
   cost_scale_factor: 0.1
@@ -45,14 +49,19 @@ info_gain_planner:
 task_info_gain_planner:
   cost_scale_factor: 0.1
 
+
 fc_pref_planner:
+  teach_adaptive: False
 
 fc_mip_planner:
+  teach_adaptive: False
 
 fc_greedy_planner:
+    teach_adaptive: False
 
 confidence_based_planner:
   confidence_threshold: 0.8
+  teach_adaptive: False
 
 fixed_planner:
   plan: ["ASK_SKILL", "ROBOT", "HUMAN", "ROBOT", "HUMAN"]

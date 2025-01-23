@@ -72,6 +72,7 @@ class MediumGridWorld(MiniGridEnv):
         )
         self.objects = []
         self.state = None
+        self.has_renderer = True
         # self.device = (
         # torch.device(0) if torch.cuda.device_count() else torch.device("cpu")
         # )

@@ -3,7 +3,7 @@ import re
 
 import numpy as np
 
-from .interaction_env import InteractionEnv
+from .interaction_env_saved import InteractionEnv
 
 from adaptive_teaming.skills.pick_place_skills import PickPlaceExpertSkill
 

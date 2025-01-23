@@ -270,9 +270,13 @@ def render_path(grid, path):
 
 class GridWorldInteractionEnv(InteractionEnv):
 
-    def __init__(self, env, human_model_cfg, cost_cfg):
-        super().__init__(env, human_model_cfg, cost_cfg)
+    def __init__(self, env, human_model_cfg, cost_cfg, prob_skill_teaching_success):
+        super().__init__(env, human_model_cfg, cost_cfg, prob_skill_teaching_success)
         self.true_human_pref = None
+        self.teach_probs = None
+
+    def set_teach_probs(self, teach_probs):
+        self.teach_probs = teach_probs
 
     def robot_step(self, *args, **kwargs):
         self.env.mission = "Robot's turn"
@@ -283,8 +287,8 @@ class GridWorldInteractionEnv(InteractionEnv):
         self.env.mission = "User's turn"
         human_pref = self._get_human_pref_for_object(
             self.env.objects[0]["object"])
-
-        return super().human_step(human_pref, args[1])
+        return super().human_step(human_pref, task=kwargs["task"])
+        # return super().human_step(human_pref, args[1])
 
     def query_skill_from_saved_demos(self, task, pref):
         """
@@ -390,7 +394,13 @@ class GridWorldInteractionEnv(InteractionEnv):
         # demo = self.human_demos[demo_key]
         # create skill from demo
         skill = PickPlaceSkill([demo], (obj_type, obj_color), (obj_position[1], obj_position[0]))
-        info.update({"skill": skill, "pref": pref})
+
+        # randomly sample for a failed teaching
+        if self.teach_probs[(obj_type, obj_color)]==0:
+            info.update({"skill": skill, "pref": pref, 'teach_success':False})
+        else:
+            info.update({"skill": skill, "pref": pref, 'teach_success':True})
+        # info.update({"skill": skill, "pref": pref})
         return None, rew, True, info
 
     def query_skill_pref(self, task):

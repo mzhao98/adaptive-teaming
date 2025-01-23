@@ -2,22 +2,14 @@ import logging
 from abc import abstractmethod
 
 import numpy as np
+import pdb
 
 logger = logging.getLogger(__name__)
 
 
 class PrefBeliefEstimator:
-    def __init__(self, env, task_seq, teach_adaptive=True):
-        self.env = env
+    def __init__(self, task_seq):
         self.task_seq = task_seq
-        self.teach_adaptive = teach_adaptive
-
-        # indexed by task id
-        self.beliefs = [self.prior() for _ in range(len(task_seq))]
-
-        # Beta random variable for the teach success for each task
-        # (Fail, Success)
-        self.teach_rvs = np.array([[0, 1] for _ in range(len(task_seq))])
 
     @abstractmethod
     def prior(self):
@@ -29,35 +21,16 @@ class PrefBeliefEstimator:
         """
         pass
 
-    @abstractmethod
-    def task_similarity_fn(self, task1, task2):
-        """
-        Task similarity function
-        """
-        raise NotImplementedError
-
-    def update_teach_prob(self, task_id, obs):
-        """
-        Update belief about the success of the teach.
-        """
-        teach_success = int(obs["teach_success"])
-        # if teach_success == False:
-            # import pdb; pdb.set_trace()
-        for task, teach_rv in zip(self.task_seq[task_id:], self.teach_rvs[task_id:]):
-            task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
-            if task_sim:
-                # import pdb; pdb.set_trace()
-                teach_rv[teach_success] = 1
-                teach_rv[1-teach_success] = 0
-
-
-
-    def get_teach_probs(self):
-        return self.teach_rvs[:, 1] / np.sum(self.teach_rvs, axis=1)
 
 class GridWorldBeliefEstimator(PrefBeliefEstimator):
-    def __init__(self, env, task_seq, teach_adaptive=True):
-        super().__init__(env, task_seq, teach_adaptive)
+    def __init__(self, env, task_seq):
+        super().__init__(task_seq)
+
+        self.env = env
+        # indexed by task id
+        self.beliefs = [self.prior() for _ in range(len(task_seq))]
+        # print("self.beliefs:", self.beliefs)
+        # pdb.set_trace()
 
     def prior(self):
         """
@@ -81,9 +54,8 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
             if other_pref_idx != pref_idx:
                 self.beliefs[task_id][other_pref_idx] = 0
 
-        for task, belief in zip(
-            self.task_seq[task_id + 1:], self.beliefs[task_id + 1:]
-        ):
+        for task, belief in zip(self.task_seq[task_id+1:],
+                                self.beliefs[task_id+1:]):
             task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
             if task_sim:
                 belief[pref_idx] = 1
@@ -97,9 +69,6 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
             # belief[pref_idx] += task_sim
 
             # belief /= belief.sum()
-
-        if self.teach_adaptive and "teach_success" in obs:
-            self.update_teach_prob(task_id, obs)
 
     def _pref_to_idx(self, pref):
         return list(self.env.pref_space).index(pref)
@@ -118,8 +87,12 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
 
 
 class PickPlaceBeliefEstimator(PrefBeliefEstimator):
-    def __init__(self, env, task_seq, teach_adaptive=True):
-        super().__init__(env, task_seq, teach_adaptive)
+    def __init__(self, env, task_seq):
+        super().__init__(task_seq)
+
+        self.env = env
+        # indexed by task id
+        self.beliefs = [self.prior() for _ in range(len(task_seq))]
 
     def prior(self):
         """
@@ -142,9 +115,8 @@ class PickPlaceBeliefEstimator(PrefBeliefEstimator):
             if other_pref_idx != pref_idx:
                 self.beliefs[task_id][other_pref_idx] = 0.1
 
-        for task, belief in zip(
-            self.task_seq[task_id + 1:], self.beliefs[task_id + 1:]
-        ):
+        for task, belief in zip(self.task_seq[task_id+1:],
+                                self.beliefs[task_id+1:]):
             task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
             if task_sim:
                 belief[pref_idx] = 1
@@ -153,9 +125,6 @@ class PickPlaceBeliefEstimator(PrefBeliefEstimator):
             # belief[pref_idx] += task_sim
 
             # belief /= belief.sum()
-
-        if self.teach_adaptive and "teach_success" in obs:
-            self.update_teach_prob(task_id, obs)
 
     def _pref_to_idx(self, pref):
         return list(self.env.pref_space).index(pref)

@@ -3,7 +3,7 @@ import logging
 from copy import copy
 import pdb
 logger = logging.getLogger(__name__)
-
+from adaptive_teaming.skills.gridworld_skills import PickPlaceSkill
 
 class InteractionEnv:
     """
@@ -11,7 +11,7 @@ class InteractionEnv:
     agent. It also implements the human model and query responses.
     """
 
-    def __init__(self, env, human_model_cfg, cost_cfg, prob_skill_teaching_success=1):
+    def __init__(self, env, human_model_cfg, cost_cfg):
         self.env = env
         self.human_model_cfg = human_model_cfg
         self.cost_cfg = cost_cfg
@@ -19,7 +19,6 @@ class InteractionEnv:
         self.current_task_id = 0
         self.human_demos = []
         self.robot_skills = self._init_robot_skills()
-        self.prob_skill_teaching_success = prob_skill_teaching_success
 
     def reset(self, task_seq):
         """
@@ -27,7 +26,7 @@ class InteractionEnv:
         """
         self.task_seq = task_seq
         self.current_task_id = 0
-        self.robot_skills = self._init_robot_skills()
+        # self.robot_skills = self._init_robot_skills()
 
     def load_human_demos(self, human_demos):
         self.human_demos = human_demos
@@ -37,33 +36,28 @@ class InteractionEnv:
         Take a step in the interaction environment.
         """
         task = self.task_seq[self.current_task_id]
+
         if action["action_type"] == "ROBOT":
-            print("current self.robot_skills", self.robot_skills)
-            skill = self.robot_skills[action["skill_id"]]
+            # pdb.set_trace()
+            if action["skill_id"] not in self.robot_skills:
+                skill =  PickPlaceSkill([['backspace']], None, None)
+            else:
+                skill = self.robot_skills[action["skill_id"]]
+            # print("obj_loc", self.robot_skills[action["skill_id"]].obj_loc)
+            # print("obj_loc", self.robot_skills[action["skill_id"]].obj_type)
             obs, rew, done, info = self.robot_step(
                 task, skill, action["pref"]
             )
             # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
-            obs, rew, done, info = self.human_step(human_pref=None, task=task)
+            obs, rew, done, info = self.human_step(None, task)
             self.current_task_id += 1
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
-            if info["teach_success"] is True:
-                self.robot_skills[self.current_task_id] = info["skill"]
-            # else:
-            #     pdb.set_trace()
-            # print("info", info)
-            # if not info["teach_success"]:
-            if info["teach_success"] is False:
-                # human has to intervene to complete the task
-                rew -= self.cost_cfg["HUMAN"]
+            # pdb.set_trace()
+            self.robot_skills[self.current_task_id] = info["skill"]
             self.current_task_id += 1
-            # XXX if we want to be truly adaptive, the we should not move
-            # forward, but this will really disadvantage the baselines
-            # if info["teach_success"]:
-                # self.current_task_id += 1
         elif action["action_type"] == "ASK_PREF":
             obs, rew, done, info = self.query_pref(task)
         else:
@@ -83,7 +77,7 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         print("task", task)
-        obs, rew, done, info = skill.step(self.env, pref_params, obs, render=self.env.has_renderer)
+        obs, rew, done, info = skill.step(self.env, pref_params, obs)
         # env reward is irrelevant
         # pdb.set_trace()
 
@@ -108,9 +102,8 @@ class InteractionEnv:
     def human_step(self, human_pref, task):
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
-        if self.env.has_renderer:
-            for _ in range(10):
-                self.env.render()
+        for _ in range(10):
+            self.env.render()
         return None, rew, True, {'pref': human_pref}
 
     def query_skill(self, task, pref):
@@ -119,10 +112,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        if self.env.has_renderer:
-            for _ in range(10):
-                self.env.render()
-        return obs, rew, True, {}
+        for _ in range(10):
+            self.env.render()
+        return None, rew, True, {}
 
     def query_skill_pref(self, task):
         """
@@ -131,9 +123,8 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        if self.env.has_renderer:
-            for _ in range(10):
-                self.env.render()
+        for _ in range(10):
+            self.env.render()
         return None, rew, True, {}
 
     def query_pref(self, task):
@@ -142,9 +133,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_PREF"]
-        if self.env.has_renderer:
-            for _ in range(10):
-                self.env.render()
+        for _ in range(10):
+            self.env.render()
+        # pdb.set_trace()
         return None, rew, True, {}
 
     @abstractmethod
@@ -173,3 +164,4 @@ class InteractionEnv:
         """Set of possible preference parameters. The human's preference is a
         pmf over this space."""
         return self.env.pref_space
+

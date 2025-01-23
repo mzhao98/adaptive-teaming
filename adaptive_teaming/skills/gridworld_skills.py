@@ -8,7 +8,7 @@ class PickPlaceSkill:
         self.obj_type = obj_type
         self.obj_loc = obj_loc
 
-    def step(self, env, pref_params, obs):
+    def step(self, env, pref_params, obs, render=False):
         key_to_action = {
             "left": Actions.left,
             "right": Actions.right,
