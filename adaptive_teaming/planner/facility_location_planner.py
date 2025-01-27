@@ -44,11 +44,12 @@ class FacilityLocationPlanner(InteractionPlanner):
         start_time = time.time()
         pref_space = self.interaction_env.pref_space
         teach_probs = self.belief_estimator.get_teach_probs()
-        c_rob = self.cost_cfg["ROBOT"]
-        c_hum = self.cost_cfg["HUMAN"]
-        c_skill = self.cost_cfg["ASK_SKILL"]
-        c_fail = self.cost_cfg["FAIL"]
-        c_pref = self.cost_cfg["ASK_PREF"]
+        ROB = self.cost_cfg["ROBOT"]
+        HUM = self.cost_cfg["HUMAN"]
+        ASK_SKILL = self.cost_cfg["ASK_SKILL"]
+        ASK_PREF = self.cost_cfg["ASK_PREF"]
+        SKILL_FAIL = self.cost_cfg["FAIL"]
+        PREF_FAIL = self.cost_cfg["PREF_COST"]
 
         def Pi_transfer(task1, task2, pref1, pref2):
             """
@@ -82,7 +83,7 @@ class FacilityLocationPlanner(InteractionPlanner):
             # hum
             facility = ("HUMAN", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = c_hum
+            setup_costs[facility] = HUM
 
             # always succeeds
             # Note: I could either set a high cost for all the other tasks or I
@@ -93,7 +94,7 @@ class FacilityLocationPlanner(InteractionPlanner):
             # demo
             facility = ("ASK_SKILL", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = c_skill
+            setup_costs[facility] = ASK_SKILL
 
             # demo affects only current and future tasks.
             # cost is a function of Pr(teaching success)
@@ -106,13 +107,13 @@ class FacilityLocationPlanner(InteractionPlanner):
             teach_fail_prob = 1 - teach_prob
 
             # gets assigned to human if teaching fails
-            service_costs[(facility, task_id)] = teach_fail_prob * c_hum
+            service_costs[(facility, task_id)] = teach_fail_prob * HUM
 
             for test_task_id in range(task_id, len(task_seq)):
                 test_task = task_seq[test_task_id]
                 # XXX robot specifically asks for a skill with a pref params
                 # XXX this will be the mle pref of the user ofc
-                service_costs[(facility, test_task_id)] = c_rob
+                service_costs[(facility, test_task_id)] = ROB
                 pref_belief = pref_beliefs[test_task_id]
                 # mle_test_pref = pref_space[np.argmax(pref_belief)]
                 # argmin over pref params
@@ -120,8 +121,8 @@ class FacilityLocationPlanner(InteractionPlanner):
                     teach_prob * Pi_transfer(task, test_task, mle_train_pref, pref)
                     for pref in pref_space
                 ]
-                execution_costs = (1 - np.array(pi_transfers)) * c_fail
-                pref_costs = (1 - np.array(pref_belief)) * c_pref
+                execution_costs = (1 - np.array(pi_transfers)) * SKILL_FAIL
+                pref_costs = (1 - np.array(pref_belief)) * PREF_FAIL
 
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug(f" Belief pref costs: {pref_costs}")
@@ -150,11 +151,11 @@ class FacilityLocationPlanner(InteractionPlanner):
                     execution_cost = (
                         1 - Pi_transfer(train_task, test_task,
                                         train_pref, test_pref)
-                    ) * c_fail
+                    ) * SKILL_FAIL
                     # logger.debug(
                     # f"  train_pref, test_pref: {train_pref}, {test_pref}")
                     pref_belief = pref_beliefs[task_id]
-                    pref_cost = (1 - pref_belief[test_pref_id]) * c_pref
+                    pref_cost = (1 - pref_belief[test_pref_id]) * PREF_FAIL
                     if execution_cost + pref_cost < best_execution_cost:
                         best_execution_cost = execution_cost + pref_cost
                         best_skill, best_pref = skill, test_pref
@@ -169,7 +170,7 @@ class FacilityLocationPlanner(InteractionPlanner):
                     facilities.append(facility)
                     setup_costs[facility] = 0  # already learned
                 logger.debug(f"  Adding ROBOT facility  for task {task_id}")
-                service_costs[(facility, task_id)] = c_rob + \
+                service_costs[(facility, task_id)] = ROB + \
                     best_execution_cost
 
         precomputation_time = time.time() - start_time
@@ -238,7 +239,6 @@ class FacilityLocationPlanner(InteractionPlanner):
         model = gp.Model("facility_location")
         model.setParam("OutputFlag", 0)
 
-        # __import__("ipdb").set_trace()
         select = model.addVars(facilities, vtype=GRB.BINARY, name="Select")
         assign = model.addVars(service_costs, ub=1,
                                vtype=GRB.CONTINUOUS, name="Assign")
