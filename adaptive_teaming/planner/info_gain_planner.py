@@ -46,6 +46,7 @@ class InfoGainPlanner(InteractionPlanner):
         plan_info {'cost': 500.0, 'assignments': {(('HUMAN', 'task-0'), 0): 1.0, (('HUMAN', 'task-1'), 1): 1.0, (('HUMAN', 'task-2'), 2): 1.0, (('HUMAN', 'task-3'), 3): 1.0, (('HUMAN', 'task-4'), 4): 1.0, (('HUMAN', 'task-5'), 5): 1.0, (('HUMAN', 'task-6'), 6): 1.0, (('HUMAN', 'task-7'), 7): 1.0, (('HUMAN', 'task-8'), 8): 1.0, (('HUMAN', 'task-9'), 9): 1.0}}
 
         """
+
         N = len(task_seq[current_task_id:])
         # some large constant
         M = sum(val for val in self.cost_cfg.values())
@@ -72,11 +73,12 @@ class InfoGainPlanner(InteractionPlanner):
                     init_entropy_gi = entropy(distr_gi)
                     # compute the new belief
                     new_belief_distr_gi = deepcopy(distr_gi)
-                    new_belief_distr_gi[pref_idx] = 1
+                    if pref_idx == g_idx:
+                        new_belief_distr_gi[0] = 1
 
-                    for other_pref_idx in range(len(new_belief_distr_gi)):
-                        if other_pref_idx != pref_idx:
-                            new_belief_distr_gi[other_pref_idx] = 0
+                        for other_pref_idx in range(len(new_belief_distr_gi)):
+                            if other_pref_idx != pref_idx:
+                                new_belief_distr_gi[other_pref_idx] = 0
 
                     # normalize new belief
                     # new_belief_distr_gi = new_belief_distr_gi / np.sum(new_belief_distr_gi)
@@ -168,8 +170,10 @@ class InfoGainPlanner(InteractionPlanner):
             plan[0]['task'] = task_seq[current_task_id]
             # find skill id for the task
             for idx in range(len(self.robot_skills)):
-                if self.robot_skills[idx]['task'] == task_seq[current_task_id] and self.robot_skills[idx]['pref'] == pref_space[pref_choice]:
-                    plan[0]['skill_id'] = idx
+                if (self.robot_skills[idx]['task'] == task_seq[current_task_id] and
+                        self.robot_skills[idx]['pref'] == pref_space[pref_choice]):
+                    plan[0]['skill_id'] = self.robot_skills[idx]['skill_id']
+                    # pdb.set_trace()
                     break
 
         plan_info = {}
@@ -225,12 +229,16 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
                     print("distr_gi", distr_gi)
                     init_entropy_gi = entropy(distr_gi)
                     # compute the new belief
-                    new_belief_distr_gi = deepcopy(distr_gi)
-                    new_belief_distr_gi[pref_idx] = 1
+                    print("pref_idx", pref_idx)
+                    print("dist_gi", distr_gi)
 
-                    for other_pref_idx in range(len(new_belief_distr_gi)):
-                        if other_pref_idx != pref_idx:
-                            new_belief_distr_gi[other_pref_idx] = 0
+                    new_belief_distr_gi = deepcopy(distr_gi)
+                    if pref_idx == g_idx:
+                        new_belief_distr_gi[0] = 1
+
+                        for other_pref_idx in range(len(new_belief_distr_gi)):
+                            if other_pref_idx != pref_idx:
+                                new_belief_distr_gi[other_pref_idx] = 0
 
                     # normalize new belief
                     # new_belief_distr_gi = new_belief_distr_gi / np.sum(new_belief_distr_gi)
@@ -243,6 +251,8 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         print("candidate_info_gains", candidate_info_gains)
         print('best_case_info_gain', best_case_info_gain)
         options_to_gain[pref_option] = best_case_info_gain
+        if sum(pref_beliefs[current_task_id]) == 0:
+            options_to_gain.pop(pref_option)
 
         # check the gain of skills
         skill_option = 'ASK_SKILL'
@@ -281,7 +291,7 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         # pdb.set_trace()
 
         # if any keys in options_to_gain are keys, drop key
-        if options_to_gain['ASK_PREF'] == 0:
+        if 'ASK_PREF' in options_to_gain and options_to_gain['ASK_PREF'] == 0:
             options_to_gain.pop('ASK_PREF')
         if options_to_gain['ASK_SKILL'] == 0:
             options_to_gain.pop('ASK_SKILL')
@@ -310,12 +320,13 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         if pref_option in options_to_gain:
             options_to_gain[pref_option] = options_to_gain[pref_option] - self.cost_cfg["ASK_PREF"] * cost_scale
         if skill_option in options_to_gain:
-            options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale
+            options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale - self.cost_cfg["ROBOT"] * cost_scale
 
         print("options_to_gain", options_to_gain)
         # choose the key in options_to_gain with highest value
         best_action = max(options_to_gain, key=options_to_gain.get)
         print("best_action", best_action)
+        # pdb.set_trace()
         print("current_task_id", current_task_id)
         # pdb.set_trace()
 
@@ -330,7 +341,8 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
             # find skill id for the task
             for idx in range(len(self.robot_skills)):
                 if self.robot_skills[idx]['task'] == task_seq[current_task_id] and self.robot_skills[idx]['pref'] == pref_space[pref_choice]:
-                    plan[0]['skill_id'] = idx
+                    plan[0]['skill_id'] = self.robot_skills[idx]['skill_id']
+                    # pdb.set_trace()
                     break
 
         plan_info = {}

@@ -1,6 +1,7 @@
 import logging
 import pdb
 import time
+from collections import OrderedDict
 from copy import copy, deepcopy
 from itertools import product
 from pprint import pformat, pprint
@@ -11,6 +12,7 @@ import numpy as np
 from gurobipy import GRB
 
 from .base_planner import InteractionPlanner
+
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -42,13 +44,13 @@ class FacilityLocationPlanner(InteractionPlanner):
         pref_similarity_fn: function to compute similarity between task preferences
         """
         start_time = time.time()
-        N = len(task_seq[current_task_id:])
         pref_space = self.interaction_env.pref_space
-        c_rob = self.cost_cfg["ROBOT"]
-        c_hum = self.cost_cfg["HUMAN"]
-        c_skill = self.cost_cfg["ASK_SKILL"]
-        c_fail = self.cost_cfg["FAIL"]
-        c_pref = self.cost_cfg["ASK_PREF"]
+        teach_probs = self.belief_estimator.get_teach_probs()
+        ROB = self.cost_cfg["ROBOT"]
+        HUM = self.cost_cfg["HUMAN"]
+        ASK_SKILL = self.cost_cfg["ASK_SKILL"]
+        SKILL_FAIL = self.cost_cfg["FAIL"]
+        PREF_FAIL = self.cost_cfg["PREF_COST"]
 
         def Pi_transfer(task1, task2, pref1, pref2):
             """
@@ -82,7 +84,7 @@ class FacilityLocationPlanner(InteractionPlanner):
             # hum
             facility = ("HUMAN", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = c_hum
+            setup_costs[facility] = HUM
 
             # always succeeds
             # Note: I could either set a high cost for all the other tasks or I
@@ -93,30 +95,36 @@ class FacilityLocationPlanner(InteractionPlanner):
             # demo
             facility = ("ASK_SKILL", f"task-{task_id}")
             facilities.append(facility)
-            setup_costs[facility] = c_skill
+            setup_costs[facility] = ASK_SKILL
 
             # demo affects only current and future tasks.
-            # assume demo also complete the task perfectly
-            service_costs[(facility, task_id)] = 0
-            # for test_task_id in range(task_id + 1, N):
+            # cost is a function of Pr(teaching success)
+            if self.planner_cfg.teach_adaptive:
+                teach_prob = teach_probs[task_id]
+            else:
+                teach_prob = 1
+            # print("teach_prob", teach_prob)
+            # print("-----------------------")
+            teach_fail_prob = 1 - teach_prob
+
+            # gets assigned to human if teaching fails
+            service_costs[(facility, task_id)] = teach_fail_prob * HUM
 
             for test_task_id in range(task_id, len(task_seq)):
                 test_task = task_seq[test_task_id]
                 # XXX robot specifically asks for a skill with a pref params
                 # XXX this will be the mle pref of the user ofc
-                service_costs[(facility, test_task_id)
-                              ] = c_rob
+                service_costs[(facility, test_task_id)] = ROB
                 pref_belief = pref_beliefs[test_task_id]
                 # mle_test_pref = pref_space[np.argmax(pref_belief)]
                 # argmin over pref params
                 pi_transfers = [
+                    teach_prob *
                     Pi_transfer(task, test_task, mle_train_pref, pref)
                     for pref in pref_space
                 ]
-                execution_costs = (1 - np.array(pi_transfers)
-                                   ) * c_fail 
-                pref_costs = (1 - np.array(pref_belief)) * \
-                    c_pref
+                execution_costs = (1 - np.array(pi_transfers)) * SKILL_FAIL
+                pref_costs = (1 - np.array(pref_belief)) * PREF_FAIL
 
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug(f" Belief pref costs: {pref_costs}")
@@ -145,11 +153,11 @@ class FacilityLocationPlanner(InteractionPlanner):
                     execution_cost = (
                         1 - Pi_transfer(train_task, test_task,
                                         train_pref, test_pref)
-                    ) * c_fail
+                    ) * SKILL_FAIL
                     # logger.debug(
                     # f"  train_pref, test_pref: {train_pref}, {test_pref}")
                     pref_belief = pref_beliefs[task_id]
-                    pref_cost = (1 - pref_belief[test_pref_id]) * c_pref
+                    pref_cost = (1 - pref_belief[test_pref_id]) * PREF_FAIL
                     if execution_cost + pref_cost < best_execution_cost:
                         best_execution_cost = execution_cost + pref_cost
                         best_skill, best_pref = skill, test_pref
@@ -164,12 +172,15 @@ class FacilityLocationPlanner(InteractionPlanner):
                     facilities.append(facility)
                     setup_costs[facility] = 0  # already learned
                 logger.debug(f"  Adding ROBOT facility  for task {task_id}")
-                service_costs[(facility, task_id)] = (
-                    c_rob + best_execution_cost
-                )
+                service_costs[(facility, task_id)] = ROB + best_execution_cost
 
         precomputation_time = time.time() - start_time
 
+        self.setup_costs, self.service_costs = self._dict_to_arrays(demands,
+                                                                    facilities,
+                                                                    setup_costs,
+                                                                    service_costs,
+                                                                    current_task_id)
         # N tasks = demands
         start_time = time.time()
         solver_info = self._solve_facility_location(
@@ -217,6 +228,23 @@ class FacilityLocationPlanner(InteractionPlanner):
 
         return plan, plan_info
 
+    def _dict_to_arrays(self, demands, facilities, setup_costs_dict, service_costs_dict,
+                        demand_start_index):
+        setup_costs = np.zeros(len(facilities))
+        for fac_id, fac in enumerate(facilities):
+            setup_costs[fac_id] = setup_costs_dict[fac]
+
+        service_costs = np.zeros(
+            (len(facilities), demand_start_index + len(demands)))
+        for fac_id, fac in enumerate(facilities):
+            for demand_id, demand in enumerate(demands):
+                service_costs[fac_id, demand_start_index + demand_id] = (
+                    service_costs_dict.get(
+                        (fac, demand_start_index + demand_id), np.inf
+                    )
+                )
+        return setup_costs, service_costs
+
     def _solve_facility_location(
         self, demands, facilities, setup_costs, service_costs, demand_start_index
     ):
@@ -230,11 +258,11 @@ class FacilityLocationPlanner(InteractionPlanner):
         # cartesian_prod = list(product(range(num_demands),
         # range(num_facilities)))
         # service_costs = {(d, f): service_costs[d, f] for d, f in cartesian_prod}
+        start_time = time.time()
 
         model = gp.Model("facility_location")
         model.setParam("OutputFlag", 0)
 
-        # __import__("ipdb").set_trace()
         select = model.addVars(facilities, vtype=GRB.BINARY, name="Select")
         assign = model.addVars(service_costs, ub=1,
                                vtype=GRB.CONTINUOUS, name="Assign")
@@ -262,6 +290,7 @@ class FacilityLocationPlanner(InteractionPlanner):
 
         solver_info = {}
 
+        # print("MIP Time taken for optimization: ", time.time() - start_time)
         if model.status == GRB.OPTIMAL:
             selected_facilities = {
                 f: select[f].X for f in facilities if select[f].X > 0.5
@@ -287,54 +316,177 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
     Implements a greedy version of the facility location planner.
     """
 
+    use_improvement1 = False  # XXX very expensive
+    # use_improvement1 = True  # XXX very expensive
+    use_improvement2 = True
+
+    # @profile
     def _solve_facility_location(
-        self, demands, facilities, setup_costs, service_costs, demand_start_index
+        self,
+        demands,
+        facilities,
+        setup_costs_dict,
+        service_costs_dict,
+        demand_start_index,
     ):
         # future demands
-        S = set(range(demand_start_index, demand_start_index +
-                      len(demands)))
+        id_to_facility = []
+        for i, fac in enumerate(facilities):
+            id_to_facility.append(fac)
+
+        demand_ids = np.array(
+            range(demand_start_index, demand_start_index + len(demands))
+        )
+
+        setup_costs= self.setup_costs
+        service_costs = self.service_costs
+
+        # 0 if uncovered, 1 if covered
+        # uncovered demands
+        demands_covered = np.zeros(
+            demand_start_index + len(demands), dtype=bool)
+        D = np.where(demands_covered)[0]
+        # covered demands
+        demands_uncovered = ~demands_covered
+        S = np.where(demands_uncovered)[0]
+        # algorithm will update this
+        working_setup_costs = deepcopy(setup_costs)
+        best_service_costs = np.ones(
+            demand_start_index + len(demands)) * np.inf
         X = []
+
+        start_time = time.time()
         while not len(S) == 0:
             # choose best facility and subset of S
             best_ratio = np.inf
             best_fac, best_assignment = None, None
-            for fac in facilities:
-                logger.debug(f"  Facility: {fac}")
-                fac_setup_cost = setup_costs[fac]
-                # find subset of client with best ratio
-                # get service costs
-                fac_service_keys = [
-                    (fac, demand) for demand in S if (fac, demand) in service_costs
-                ]
-                fac_service_costs = [service_costs[key]
-                                     for key in fac_service_keys]
+            # for fac in facilities:
+            for fac_id in range(len(facilities)):
+                # if logger.isEnabledFor(logging.DEBUG):
+                    # logger.debug(f"  Facility: {facilities[fac_id]}")
+                fac_setup_cost = working_setup_costs[fac_id]
+                fac_service_costs = service_costs[fac_id, demands_uncovered]
                 # sort the clients in terms of service cost from i
                 sorted_indices = np.argsort(fac_service_costs)
 
                 # find optimal prefix
-                service_cost_sum = 0
 
-                for i, index in enumerate(sorted_indices):
-                    service_cost_sum += fac_service_costs[index]
-                    ratio = (fac_setup_cost + service_cost_sum) / (i + 1)
-                    logger.debug(f"    Ratio: {ratio}")
-                    if ratio < best_ratio:
-                        logger.debug(
-                            f"      Better ratio found! {best_ratio} -> {ratio}"
-                        )
-                        best_ratio = ratio
-                        best_fac = fac
-                        best_assignment = [
-                            fac_service_keys[j] for j in sorted_indices[: i + 1]
-                        ]
+                if not self.use_improvement1:
+                    s_costs = fac_service_costs[sorted_indices]
+                    s_cost_sums = np.cumsum(s_costs)
+                    improvements = fac_setup_cost + s_cost_sums
+                    ratios = improvements / (np.arange(len(s_costs)) + 1)
+                    best_ratio_id = np.argmin(ratios)
+                    if ratios[best_ratio_id] < best_ratio:
+                        best_ratio = ratios[best_ratio_id]
+                        best_fac = fac_id
+                        best_assignment = S[sorted_indices[:best_ratio_id + 1]]
+                else:
+                    s_costs = fac_service_costs[sorted_indices]
+                    s_cost_sums = np.cumsum(s_costs)
+                    improvements = fac_setup_cost + s_cost_sums
 
-            logger.debug(f"Best facility: {best_fac}")
-            assigned_demands = [demand for (_, demand) in best_assignment]
+                    raise NotImplementedError
+                    # add cost_decrements
+                    __import__('ipdb').set_trace()
+                    cost_decrements = best_service_costs[D] - service_costs[fac_id, D]
+                    cost_decrements = np.maximum(0, cost_decrements)
+
+                    improvements -= cost_decrements
+
+                    ratios = improvements / (np.arange(len(s_costs)) + 1)
+                    best_ratio_id = np.argmin(ratios)
+                    if ratios[best_ratio_id] < best_ratio:
+                        best_ratio = ratios[best_ratio_id]
+                        best_fac = fac_id
+                        best_assignment = S[sorted_indices[:best_ratio_id + 1]]
+
+                # for i, index in enumerate(sorted_indices):
+                    # if np.isinf(fac_service_costs[index]):
+                        # # ratio can't improve anymore
+                        # break
+
+                    # service_cost_sum += fac_service_costs[index]
+                    # improvement = fac_setup_cost + service_cost_sum
+
+                # for i, index in enumerate(sorted_indices):
+                    # if np.isinf(fac_service_costs[index]):
+                        # # ratio can't improve anymore
+                        # break
+                    # # add improvement in the cost of previously opened facility
+                    # cost_decrement = 0
+                    # if self.use_improvement1:
+                        # # for d in range(
+                        # # demand_start_index, demand_start_index + len(demands)
+                        # # ):
+                        # # if d not in S and (fac, d) in service_costs:
+                        # # for d in D:
+                        # # already assigned
+                        # best_assigned_costs = best_service_costs[D]
+                        # f_service_costs = np.array(
+                            # [service_costs.get((fac, d), np.inf) for d in D]
+                        # )
+                        # # __import__("ipdb").set_trace()
+                        # cost_decrement = np.sum(
+                            # np.maximum(0, best_assigned_costs -
+                                       # f_service_costs)
+                        # )
+                        # if cost_decrement > 0:
+                            # pass
+                            # # if logger.isEnabledFor(logging.DEBUG):
+                                # # logger.debug(
+                                    # # f"    Facility {fac} decrs cost of opened facs by {cost_decrement}"
+                                # # )
+                                # # logger.debug(
+                                    # # f"    Facility {fac} decrs cost of opened facs by {cost_decrement}"
+                                # # )
+
+                    # ratio = (improvement - cost_decrement) / (i + 1)
+
+                    # # if logger.isEnabledFor(logging.DEBUG):
+                        # # logger.debug(f"    Ratio: {ratio}")
+
+                    # if ratio < best_ratio:
+                        # # if logger.isEnabledFor(logging.DEBUG):
+                            # # logger.debug(
+                                # # f"      Better ratio found! {best_ratio} -> {ratio}"
+                            # # )
+                        # best_ratio = ratio
+                        # best_fac = fac_id
+                        # # best_assignment = [
+                        # # fac_service_keys[j] for j in sorted_indices[: i + 1]
+                        # # ]
+                        # # sorted indices are with respect to demands_uncovered
+                        # best_assignment = S[sorted_indices[: i + 1]]
+
+            # if logger.isEnabledFor(logging.DEBUG):
+                # logger.debug(f"Best facility: {best_fac}")
+            # try:
+                # assigned_demands = [demand for (_, demand) in best_assignment]
+            # except:
+                # __import__("ipdb").set_trace()
+
+            for d in best_assignment:
+                if service_costs[best_fac, d] < best_service_costs[d]:
+                    best_service_costs[d] = service_costs[best_fac, d]
+                    demands_covered[d] = True
+                    demands_uncovered[d] = False
+
             # open facility
             X.append(best_fac)
+            if self.use_improvement2:
+                # make setup cost 0 since it is already open
+                # if logger.isEnabledFor(logging.DEBUG):
+                    # logger.debug(f"  Settings setup cost to 0 for {best_fac}")
+                working_setup_costs[best_fac] = 0
+
             # remove assigned demands from S
-            S.difference_update(assigned_demands)
-            logger.debug(f"  Remaining demands: {S}")
+            # S.difference_update(assigned_demands)
+            S = np.where(demands_uncovered)[0]
+            D = np.where(demands_covered)[0]
+
+            # if logger.isEnabledFor(logging.DEBUG):
+                # logger.debug(f"  Remaining demands: {S}")
 
         # compute best assignment for the selected facilities
         assignments = {}
@@ -344,16 +496,20 @@ class FacilityLocationGreedyPlanner(FacilityLocationPlanner):
             total_cost += setup_costs[fac]
 
         # compute assignment and service costs
-        for demand in range(demand_start_index, demand_start_index + len(demands)):
-            demand_service_costs = [
-                service_costs.get((fac, demand), np.inf) for fac in X
-            ]
+
+        for demand in demand_ids:
+            # demand_service_costs = [
+                # service_costs.get((fac, demand), np.inf) for fac in X
+            # ]
             # pick best facility
+            # best_fac = X[np.argmin(demand_service_costs)]
+            demand_service_costs = service_costs[X, demand]
             best_fac = X[np.argmin(demand_service_costs)]
+            assignments[(id_to_facility[best_fac], demand)] = 1
+            total_cost += service_costs[best_fac, demand]
 
-            assignments[(best_fac, demand)] = 1
-            total_cost += service_costs[(best_fac, demand)]
-
+        # print("Greedy Time taken for optimization: ", time.time() - start_time)
+        # __import__('ipdb').set_trace()
         solver_info = {"cost": total_cost}
         solver_info["assignments"] = assignments
         return solver_info
@@ -403,6 +559,7 @@ class FacilityLocationPrefPlanner(InteractionPlanner):
                 current_task_id, {"pref": possible_pref_response}
             )
             new_pref_beliefs = belief_estimator.beliefs
+            # print("new_pref_beliefs", new_pref_beliefs)
             logger.debug(
                 f"  New pref beliefs: {new_pref_beliefs[current_task_id:]}")
             # __import__('ipdb').set_trace()
@@ -420,7 +577,10 @@ class FacilityLocationPrefPlanner(InteractionPlanner):
             )
             logger.debug(f"  Plan 2 cost: {plan_info2['cost']}")
         # assume robot asks for preference
-        expected_possible_cost = np.dot(possible_costs, pref_belief)
+        if sum(pref_belief) == 0:
+            expected_possible_cost = np.dot(possible_costs, np.ones(len(possible_costs)))
+        else:
+            expected_possible_cost = np.dot(possible_costs, pref_belief)
         logger.debug(
             f"    Expected cost after pref: {expected_possible_cost} vs {plan_info1['cost']} now "
         )
@@ -430,7 +590,8 @@ class FacilityLocationPrefPlanner(InteractionPlanner):
             plan = plan1
             plan[0] = {"action_type": "ASK_PREF"}
             plan_info = plan_info1
-            plan_info["cost"] = expected_possible_cost + self.cost_cfg["ASK_PREF"]
+            plan_info["cost"] = expected_possible_cost + \
+                self.cost_cfg["ASK_PREF"]
             return plan, plan_info
         else:
             logger.debug("  Not asking for preference")
@@ -466,7 +627,7 @@ class ConfidenceBasedFacilityLocationPlanner(FacilityLocationPlanner):
         # compute plan with updated belief
         pref_belief = pref_beliefs[current_task_id]
         logger.debug(f"  Pref belief: {pref_beliefs[current_task_id:]}")
-        if np.max(pref_belief) < self.planner_cfg["confidence_threshold"]:
+        if sum(pref_belief)> 0 and np.max(pref_belief) < self.planner_cfg["confidence_threshold"]:
             logger.debug("  Asking for preference")
             plan[0] = {"action_type": "ASK_PREF"}
         return plan, plan_info
@@ -677,7 +838,8 @@ if __name__ == "__main__":
                     )
                     * cost_cfg["fail_cost"]
                 )
-                pot_skills = skills + [{"policy": None, "train_task": tasks[0]}]
+                pot_skills = skills + \
+                    [{"policy": None, "train_task": tasks[0]}]
                 pot_total_fail_cost = (
                     np.array(
                         [
