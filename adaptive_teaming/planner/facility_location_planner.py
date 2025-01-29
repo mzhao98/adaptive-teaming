@@ -225,7 +225,6 @@ class FacilityLocationPlanner(InteractionPlanner):
         plan_info = solver_info
         plan_info["solve_time"] = fl_solve_time
         plan_info["precomputation_time"] = precomputation_time
-
         return plan, plan_info
 
     def _dict_to_arrays(self, demands, facilities, setup_costs_dict, service_costs_dict,

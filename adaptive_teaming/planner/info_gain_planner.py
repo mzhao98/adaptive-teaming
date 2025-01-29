@@ -664,3 +664,4 @@ if __name__ == "__main__":
 
         pref_similarity_fn = task_similarity_fn
         planner.plan(task_seq, task_similarity_fn, pref_similarity_fn)
+

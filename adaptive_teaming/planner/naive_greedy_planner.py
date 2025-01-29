@@ -144,4 +144,3 @@ class NaiveGreedyPlanner(InteractionPlanner):
 
         return plan, plan_info
 
-
