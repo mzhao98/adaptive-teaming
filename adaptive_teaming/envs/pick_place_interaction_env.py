@@ -5,7 +5,7 @@ import numpy as np
 
 from .interaction_env import InteractionEnv
 
-from adaptive_teaming.skills.pick_place_skills import PickPlaceExpertSkill
+from adaptive_teaming.skills.pick_place_skills import PickPlaceExpert
 
 
 logger = logging.getLogger(__name__)
@@ -31,15 +31,23 @@ class PickPlaceInteractionEnv(InteractionEnv):
         """
         self.env.mission = f"Requesting user to teach with param {pref}"
         obs, rew, done, info = super().query_skill(task, pref)
-        # TODO load mimicgen demos
         demo_key = task["obj_type"] + "-" + pref
         # if demo_key not in self.human_demos:
             # raise ValueError(f"Demo not found for key {demo_key}")
         # demo = self.human_demos[demo_key]
         # create skill from demo
         # skill = PickPlaceSkill([demo])
-        skill = PickPlaceExpertSkill()
+        skill = PickPlaceExpert.get_skill(self.env, task, pref)
         info.update({"skill": skill, "pref": pref})
+
+        # check if teaching was successful and set teach_success in info
+        obs2, rew2, done2, info2 = skill.step(self.env, pref, obs, render=self.env.has_renderer)
+        if not info2["safety_violated"] and self.human_evaluation_of_robot() == 1:
+            info["teach_success"] = 1
+            logger.debug("    Teaching succeeded")
+        else:
+            info["teach_success"] = 0
+            logger.debug("    Teaching failed")
         return None, rew, True, info
 
     def query_pref(self, task):

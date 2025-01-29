@@ -244,7 +244,7 @@ class GridWorldInteractionEnv(InteractionEnv):
         self.env.mission = "User's turn"
         human_pref = self._get_human_pref_for_object(
             self.env.objects[0]["object"])
-        return super().human_step(human_pref, *args, **kwargs)
+        return super().human_step(human_pref, task=kwargs["task"])
 
     def query_skill_from_saved_demos(self, task, pref):
         """

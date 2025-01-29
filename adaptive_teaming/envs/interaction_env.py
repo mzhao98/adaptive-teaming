@@ -45,12 +45,19 @@ class InteractionEnv:
             # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
-            obs, rew, done, info = self.human_step(None, task)
+            obs, rew, done, info = self.human_step(human_pref=None, task=task)
             self.current_task_id += 1
         elif action["action_type"] == "ASK_SKILL":
             obs, rew, done, info = self.query_skill(task, action['pref'])
             self.robot_skills[self.current_task_id] = info["skill"]
+            if not info["teach_success"]:
+                # human has to intervene to complete the task
+                rew -= self.cost_cfg["HUMAN"]
             self.current_task_id += 1
+            # XXX if we want to be truly adaptive, the we should not move
+            # forward, but this will really disadvantage the baselines
+            # if info["teach_success"]:
+                # self.current_task_id += 1
         elif action["action_type"] == "ASK_PREF":
             obs, rew, done, info = self.query_pref(task)
         else:
@@ -70,7 +77,7 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         print("task", task)
-        obs, rew, done, info = skill.step(self.env, pref_params, obs)
+        obs, rew, done, info = skill.step(self.env, pref_params, obs, render=self.env.has_renderer)
         # env reward is irrelevant
         # pdb.set_trace()
 
@@ -95,8 +102,9 @@ class InteractionEnv:
     def human_step(self, human_pref, task):
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
-        for _ in range(10):
-            self.env.render()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {'pref': human_pref}
 
     def query_skill(self, task, pref):
@@ -105,9 +113,10 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        for _ in range(10):
-            self.env.render()
-        return None, rew, True, {}
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
+        return obs, rew, True, {}
 
     def query_skill_pref(self, task):
         """
@@ -116,8 +125,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_SKILL"]
-        for _ in range(10):
-            self.env.render()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {}
 
     def query_pref(self, task):
@@ -126,9 +136,9 @@ class InteractionEnv:
         """
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["ASK_PREF"]
-        for _ in range(10):
-            self.env.render()
-        # pdb.set_trace()
+        if self.env.has_renderer:
+            for _ in range(10):
+                self.env.render()
         return None, rew, True, {}
 
     @abstractmethod
