@@ -251,6 +251,8 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         print("candidate_info_gains", candidate_info_gains)
         print('best_case_info_gain', best_case_info_gain)
         options_to_gain[pref_option] = best_case_info_gain
+        if sum(pref_beliefs[current_task_id]) == 0:
+            options_to_gain.pop(pref_option)
 
         # check the gain of skills
         skill_option = 'ASK_SKILL'
@@ -289,7 +291,7 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         # pdb.set_trace()
 
         # if any keys in options_to_gain are keys, drop key
-        if options_to_gain['ASK_PREF'] == 0:
+        if 'ASK_PREF' in options_to_gain and options_to_gain['ASK_PREF'] == 0:
             options_to_gain.pop('ASK_PREF')
         if options_to_gain['ASK_SKILL'] == 0:
             options_to_gain.pop('ASK_SKILL')
@@ -318,12 +320,13 @@ class TaskRelevantInfoGainPlanner(InteractionPlanner):
         if pref_option in options_to_gain:
             options_to_gain[pref_option] = options_to_gain[pref_option] - self.cost_cfg["ASK_PREF"] * cost_scale
         if skill_option in options_to_gain:
-            options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale
+            options_to_gain[skill_option] = options_to_gain[skill_option] - self.cost_cfg["ASK_SKILL"] * cost_scale - self.cost_cfg["ROBOT"] * cost_scale
 
         print("options_to_gain", options_to_gain)
         # choose the key in options_to_gain with highest value
         best_action = max(options_to_gain, key=options_to_gain.get)
         print("best_action", best_action)
+        # pdb.set_trace()
         print("current_task_id", current_task_id)
         # pdb.set_trace()
 

@@ -55,7 +55,7 @@ class ConfidenceLearnerPlanner(InteractionPlanner):
         current_pref_belief = pref_beliefs[current_task_id]
         best_skill_pref_to_ask_for = None
         list_of_skills_type_pref = [(self.robot_skills[idx]['task'], self.robot_skills[idx]['pref']) for idx in range(len(self.robot_skills))]
-        if max(current_pref_belief) < confidence_threshold:
+        if max(current_pref_belief) < confidence_threshold and sum(pref_beliefs[current_task_id]) >0:
             best_action = 'ASK_PREF'
 
         else:

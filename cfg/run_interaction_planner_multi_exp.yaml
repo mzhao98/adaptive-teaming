@@ -1,5 +1,5 @@
 defaults:
-  - cost_cfg/high_cost_human  # high_cost_human, low_cost_human, normative_human
+  - cost_cfg/low_cost_human  # high_cost_human, low_cost_human, normative_human
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
@@ -16,7 +16,8 @@ wandb:
 
 env: med_gridworld
 prob_skill_teaching_success: 0
-planner: [fc_pref_planner, task_info_gain_planner, confidence_based_planner, naive_greedy_planner, confidence_learner_planner] #[] #[fc_adaptive_pref_planner, fc_pref_planner, task_info_gain_planner, info_gain_planner, confidence_based_planner]
+num_skills_human_wants_to_perform: 0
+planner: [fc_adaptive_pref_planner, task_info_gain_planner, confidence_based_planner, naive_greedy_planner,  confidence_learner_planner] #[]
 N_exps: 30
 fc_planner: greedy
 
@@ -50,7 +51,7 @@ info_gain_planner:
   cost_scale_factor: 0.1
 
 task_info_gain_planner:
-  cost_scale_factor: 0.1
+  cost_scale_factor: 0.01
 
 
 fc_pref_planner:

@@ -2,11 +2,14 @@ from minigrid.core.actions import Actions
 import pdb
 
 class PickPlaceSkill:
-    def __init__(self, plans, obj_type, obj_loc):
+    def __init__(self, plans, obj_type, obj_loc, goal_loc, goals_list):
         # one plan for each goal
         self.plans = plans
         self.obj_type = obj_type
         self.obj_loc = obj_loc
+        self.goal_loc = goal_loc
+        self.goals_list = goals_list
+
 
     def step(self, env, pref_params, obs, render=False):
         key_to_action = {

@@ -249,8 +249,8 @@ def convert_to_turn_based_actions_to_goal(obj_type, path, pick_up_object, drop_o
         # current_direction = next_direction
 
 
-    if drop_object:
-        actions.append("backspace")
+    # if drop_object:
+    #     actions.append("backspace")
 
     return actions, current_heading
 
@@ -274,9 +274,15 @@ class GridWorldInteractionEnv(InteractionEnv):
         super().__init__(env, human_model_cfg, cost_cfg, prob_skill_teaching_success)
         self.true_human_pref = None
         self.teach_probs = None
+        self.human_only_skills = []
 
     def set_teach_probs(self, teach_probs):
         self.teach_probs = teach_probs
+
+    def set_human_only_skills(self, human_only_skills):
+        self.human_only_skills = human_only_skills
+        # set to lower case
+        self.human_only_skills = [(obj_type.lower(), obj_color.lower()) for obj_type, obj_color in self.human_only_skills]
 
     def robot_step(self, *args, **kwargs):
         self.env.mission = "Robot's turn"
@@ -285,8 +291,11 @@ class GridWorldInteractionEnv(InteractionEnv):
 
     def human_step(self, *args, **kwargs):
         self.env.mission = "User's turn"
-        human_pref = self._get_human_pref_for_object(
-            self.env.objects[0]["object"])
+        # human_pref = self._get_human_pref_for_object(
+        #     self.env.objects[0]["object"])
+        human_pref = self._get_human_pref_for_object_given_type_color(kwargs["task"]["obj_type"], kwargs["task"]["obj_color"])
+        # pdb.set_trace()
+
         return super().human_step(human_pref, task=kwargs["task"])
         # return super().human_step(human_pref, args[1])
 
@@ -354,7 +363,10 @@ class GridWorldInteractionEnv(InteractionEnv):
         obj_color = task["obj_color"]
         start = agent_start_pos
         object_location = obj_position
-        goal_location = goals[correct_goal]
+        if correct_goal == 'human_only':
+            # pick one at random
+            correct_goal = np.random.choice(list(goals.keys()))
+        goal_location = goals[pref]
         # pdb.set_trace()
 
         # Path to object
@@ -393,7 +405,9 @@ class GridWorldInteractionEnv(InteractionEnv):
         demo = actions
         # demo = self.human_demos[demo_key]
         # create skill from demo
-        skill = PickPlaceSkill([demo], (obj_type, obj_color), (obj_position[1], obj_position[0]))
+        skill = PickPlaceSkill([demo], (obj_type, obj_color),
+                               (obj_position[1], obj_position[0]), (goal_location[1], goal_location[0]),
+                               goals)
 
         # randomly sample for a failed teaching
         if self.teach_probs[(obj_type, obj_color)]==0:
@@ -447,28 +461,39 @@ class GridWorldInteractionEnv(InteractionEnv):
         traj : list
             The trajectory of the robot.
         """
+        # pdb.set_trace()
+        output = 0
         agent_pos = self.env.agent_pos
         # pdb.set_trace()
         if self.env.carrying:
             # object pos same as agent pos
-            human_pref_goal = self._get_human_pref_for_object(
-                self.env.carrying)
+            human_pref_goal = self._get_human_pref_for_object(self.env.carrying)
             logger.debug(f"  Human pref goal: {human_pref_goal}")
             # print("human_pref_goal", human_pref_goal)
-            #
+            if human_pref_goal == 'human_only' or (self.env.carrying.type, self.env.carrying.color) in self.human_only_skills:
+                output= 0
+            else:
 
-            goal_pos = self.env.goals[human_pref_goal](
-                self.env.width, self.env.height)
-            # print("goal_pos", goal_pos)
-            # print("agent_pos: ", agent_pos)
-            # pdb.set_trace()
-            # print("goal_pos: ", goal_pos)
-            if agent_pos[0] == goal_pos[0] and agent_pos[1] == goal_pos[1]:
-                logger.debug("HUMAN PREF GOAL REACHED")
-                return 1
+                goal_pos = self.env.goals[human_pref_goal](self.env.width, self.env.height)
+                # print("goal_pos", goal_pos)
+                # print("agent_pos: ", agent_pos)
+                # pdb.set_trace()
+                # print("goal_pos: ", goal_pos)
+                if agent_pos[0] == goal_pos[0] and agent_pos[1] == goal_pos[1]:
+                    logger.debug("HUMAN PREF GOAL REACHED")
+                    output = 1
+                    if len(self.human_only_skills) > 0:
+                        if (self.env.carrying.type, self.env.carrying.color) in self.human_only_skills:
+                            output = 0
+
             # else:
             #     pdb.set_trace()
-        return 0
+        # if in self.human_only_skills, then return 0
+        if output == 0:
+            print("path incorrect goal")
+            # pdb.set_trace()
+
+        return output
 
     def set_human_pref(self, pref):
         self.true_human_pref = pref
@@ -488,8 +513,38 @@ class GridWorldInteractionEnv(InteractionEnv):
         #     return "G2"
         # else:
         # print("self.true_human_pref", self.true_human_pref)
+        if (obj.type, obj.color) in self.human_only_skills:
+            # pdb.set_trace()
+            return 'human_only'
+
+
         if (obj.type, obj.color) in self.true_human_pref:
             return self.true_human_pref[(obj.type, obj.color)]
+        else:
+            raise NotImplementedError
+
+    def _get_human_pref_for_object_given_type_color(self, obj_type, obj_color):
+        # if obj.type == "key":
+        #     if obj.color == "red":
+        #         return "G1"
+        #     elif obj.color == "blue":
+        #         return "G2"
+        #     else:
+        #         return "G2"
+        #
+        # elif obj.type == "ball":
+        #     return "G2"
+        # elif obj.type == "box":
+        #     return "G2"
+        # else:
+        # print("self.true_human_pref", self.true_human_pref)
+        # print("obj_type", obj_type)
+        # print("obj_color", obj_color)
+        obj_color = obj_color.lower()
+        obj_type = obj_type.lower()
+
+        if (obj_type, obj_color) in self.true_human_pref:
+            return self.true_human_pref[(obj_type, obj_color)]
         else:
             raise NotImplementedError
 

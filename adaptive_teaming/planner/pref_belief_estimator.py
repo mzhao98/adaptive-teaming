@@ -50,6 +50,20 @@ class PrefBeliefEstimator:
                 teach_rv[teach_success] = 1
                 teach_rv[1-teach_success] = 0
 
+    def zero_teach_prob(self, task_id, obs):
+        """
+        Update belief about the success of the teach.
+        """
+        teach_success = 0
+        # if teach_success == False:
+            # import pdb; pdb.set_trace()
+        for task, teach_rv in zip(self.task_seq[task_id:], self.teach_rvs[task_id:]):
+            task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
+            if task_sim:
+                # import pdb; pdb.set_trace()
+                teach_rv[teach_success] = 1
+                teach_rv[1-teach_success] = 0
+
 
 
     def get_teach_probs(self):
@@ -74,27 +88,49 @@ class GridWorldBeliefEstimator(PrefBeliefEstimator):
         """
         # immediately converges to 1 after a preference query
         pref = obs["pref"]
-        pref_idx = self._pref_to_idx(pref)
-        self.beliefs[task_id][pref_idx] = 1
-        # print("self.beliefs[task_id]:", self.beliefs[task_id])
-        for other_pref_idx in range(len(self.beliefs[task_id])):
-            if other_pref_idx != pref_idx:
+
+        if pref == 'human_only':
+            for other_pref_idx in range(len(self.beliefs[task_id])):
                 self.beliefs[task_id][other_pref_idx] = 0
 
-        for task, belief in zip(
-            self.task_seq[task_id + 1:], self.beliefs[task_id + 1:]
-        ):
-            task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
-            if task_sim:
-                belief[pref_idx] = 1
-
-                for other_pref_idx in range(len(belief)):
-                    if other_pref_idx != pref_idx:
+                for task, belief in zip(
+                    self.task_seq[task_id + 1:], self.beliefs[task_id + 1:]
+                ):
+                    task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
+                    if task_sim:
                         belief[other_pref_idx] = 0
+            self.zero_teach_prob(task_id, obs)
+
+        else:
+            pref_idx = self._pref_to_idx(pref)
+            # if sum(self.beliefs[task_id]) > 0:
+            self.beliefs[task_id][pref_idx] *= 1
+            # print("self.beliefs[task_id]:", self.beliefs[task_id])
+            for other_pref_idx in range(len(self.beliefs[task_id])):
+                if other_pref_idx != pref_idx:
+                    self.beliefs[task_id][other_pref_idx] *= 0
+
+            for task, belief in zip(
+                self.task_seq[task_id + 1:], self.beliefs[task_id + 1:]
+            ):
+                task_sim = self.task_similarity_fn(self.task_seq[task_id], task)
+                if task_sim:
+                    belief[pref_idx] *= 1
+
+                    for other_pref_idx in range(len(belief)):
+                        if other_pref_idx != pref_idx:
+                            belief[other_pref_idx] *= 0
 
             # bayesian update of the belief
             # XXX fix this
             # belief[pref_idx] += task_sim
+        # normalize beliefs
+        # print("self.beliefs[task_id]:", self.beliefs)
+        for i in range(len(self.beliefs)):
+            belief = self.beliefs[i]
+            belief_sum = sum(belief)
+            if belief_sum > 0:
+                self.beliefs[i] /= belief_sum
 
             # belief /= belief.sum()
 

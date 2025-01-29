@@ -32,24 +32,70 @@ class InteractionEnv:
     def load_human_demos(self, human_demos):
         self.human_demos = human_demos
 
-    def step(self, action):
+    def choose_best_skill(self, task, pref_beliefs, current_skill_library):
+        """
+        Choose the best skill with the lowest cost.
+        """
+        beliefs = pref_beliefs
+        goal_names = {'G1':0, 'G2':1, 'G3':2}
+        best_skill = None
+        best_skill_cost = float('inf')
+        best_pref = None
+        for skill_id in current_skill_library:
+            skill = current_skill_library[skill_id]
+            # pdb.set_trace()
+            skill_obj_type = skill.obj_type
+            if skill_obj_type != (task['obj_type'], task['obj_color']):
+                continue
+            likelihood_of_success = 1
+            goal_loc_of_skill = current_skill_library[skill_id].goal_loc
+            goals_list = current_skill_library[skill_id].goals_list
+            # pdb.set_trace()
+            # invert goals_list
+            goals_dict = {(v[1], v[0]): k for k, v in goals_list.items()}
+            # get the key for index of the goal location in the goals dict
+            candidate_pref = goals_dict[goal_loc_of_skill]
+            # assign index of goal
+            goal_index = goal_names[candidate_pref]
+            # print("goal_index", goal_index)
+            # print("beliefs", beliefs)
+
+            # get the likelihood of success for the goal
+            likelihood_of_success = beliefs[goal_index]
+            # get the cost of the skill
+            skill_cost = likelihood_of_success * self.cost_cfg['PREF_COST']
+            # print("skill_cost", skill_cost)
+            if skill_cost < best_skill_cost:
+                best_skill = skill
+                best_pref = candidate_pref
+                best_skill_cost = skill_cost
+        return best_skill, best_pref
+
+
+
+    def step(self, action, pref_beliefs=None):
         """
         Take a step in the interaction environment.
         """
         task = self.task_seq[self.current_task_id]
+        # pdb.set_trace()
         if action["action_type"] == "ROBOT":
             print("current self.robot_skills", self.robot_skills)
             skill = self.robot_skills[action["skill_id"]]
+            # pdb.set_trace()
             obs, rew, done, info = self.robot_step(
                 task, skill, action["pref"]
             )
             # pdb.set_trace()
             self.current_task_id += 1
         elif action["action_type"] == "HUMAN":
-            obs, rew, done, info = self.human_step(human_pref=None, task=task)
+            human_pref_chosen = self._get_human_pref_for_object_given_type_color(task['obj_type'], task['obj_color'])
+            print('human_pref_chosen', human_pref_chosen)
+            obs, rew, done, info = self.human_step(human_pref=human_pref_chosen, task=task)
             self.current_task_id += 1
+
         elif action["action_type"] == "ASK_SKILL":
-            obs, rew, done, info = self.query_skill(task, action['pref'])
+            obs, rew, done, info = self.query_skill(task, action["pref"])
             if info["teach_success"] is True:
                 self.robot_skills[self.current_task_id] = info["skill"]
             # else:
@@ -57,8 +103,19 @@ class InteractionEnv:
             # print("info", info)
             # if not info["teach_success"]:
             if info["teach_success"] is False:
+                # pdb.set_trace()
                 # human has to intervene to complete the task
                 rew -= self.cost_cfg["HUMAN"]
+            else:
+                skill, pref = self.choose_best_skill(task, pref_beliefs[self.current_task_id], self.robot_skills)
+                # pdb.set_trace()
+                obs_r, rew_r, done_r, info_r = self.robot_step(
+                    task, skill, pref
+                )
+                rew += rew_r
+                # pdb.set_trace()
+                # if rew_r < -200:
+                #     pdb.set_trace()
             self.current_task_id += 1
             # XXX if we want to be truly adaptive, the we should not move
             # forward, but this will really disadvantage the baselines
@@ -91,21 +148,26 @@ class InteractionEnv:
         if info["safety_violated"] is True:
             # rew -= 100 # I think this should be fail cost
             rew -= self.cost_cfg['FAIL']
-
+            print("path failed")
+            pdb.set_trace()
 
         human_sat = self.human_evaluation_of_robot(
             None)
-        # if human_sat == 0:
-        #     pdb.set_trace()
+        # pdb.set_trace()
+        if human_sat == 0:
+            print("human pref not satisfied")
+            # pdb.set_trace()
         rew -= (1 - human_sat) * self.cost_cfg["PREF_COST"]
 
         rew -= self.cost_cfg["ROBOT"]
-        # pdb.set_trace()
+        # if rew < -self.cost_cfg["ROBOT"]:
+        #     pdb.set_trace()
         return None, rew, True, {}
 
     # human model
     # -------------
     def human_step(self, human_pref, task):
+        print("human_pref", human_pref)
         obs = self.env.reset_to_state(task)
         rew = -self.cost_cfg["HUMAN"]
         if self.env.has_renderer:

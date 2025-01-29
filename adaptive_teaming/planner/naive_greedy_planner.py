@@ -67,7 +67,7 @@ class NaiveGreedyPlanner(InteractionPlanner):
             prob_skill = 1 if (task_seq[current_task_id], pref_space[pref_idx]) in list_of_skills_type_pref else 0
 
             # candidate reward is the likelihood of needing to ask for a skill given that the pref is determined by this query
-            future_skill_cost = -self.cost_cfg["ASK_SKILL"] * (1 - prob_skill)
+            future_skill_cost = (-self.cost_cfg["ASK_SKILL"] -self.cost_cfg['ROBOT'])* (1 - prob_skill)
             candidate_reward = -self.cost_cfg["ASK_PREF"] + future_skill_cost
 
             potential_best_case_rewards_for_pref.append(candidate_reward)
@@ -75,6 +75,8 @@ class NaiveGreedyPlanner(InteractionPlanner):
         # take the best case preference query option (best case reward if preference query is asked)
         best_case_reward_for_pref = max(potential_best_case_rewards_for_pref)
         options_to_gain[pref_option] = best_case_reward_for_pref
+        if sum(pref_beliefs[current_task_id]) == 0:
+            options_to_gain.pop(pref_option)
 
         # compute the best case skill gain
         skill_option = 'ASK_SKILL'
@@ -87,7 +89,7 @@ class NaiveGreedyPlanner(InteractionPlanner):
             # check if the robot has the skill
             prob_skill = 1 if (task_seq[current_task_id], pref_space[pref_idx]) in list_of_skills_type_pref else 0
             # candidate_reward = reward if it were executed correctly - likelihood of wrong goal * pref cost
-            candidate_reward = -self.cost_cfg['ASK_SKILL'] - prob_wrong_pref * self.cost_cfg['PREF_COST']
+            candidate_reward = -self.cost_cfg['ASK_SKILL'] - self.cost_cfg['ROBOT'] - prob_wrong_pref * self.cost_cfg['PREF_COST']
 
             potential_best_case_rewards_for_skill.append(candidate_reward)
         # take the optimistic skill option (best case reward if skill query is asked)
